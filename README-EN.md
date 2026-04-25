@@ -25,15 +25,15 @@ fetch, dedupe, analyze, subscribe, and push from one platform, with MCP + CLI in
 ![Slack](https://img.shields.io/badge/Slack-Notify-4A154B?style=flat-square)
 ![Email](https://img.shields.io/badge/Email-Notify-6366F1?style=flat-square)
 
-**🏷️ Core Tags**
+**🏷️ Important Tags**
 
-![6 Pages](https://img.shields.io/badge/6%20Pages-Independent-0EA5E9?style=flat-square)
-![MCP Tools](https://img.shields.io/badge/MCP%20Tools-22-111827?style=flat-square)
-![Dedupe](https://img.shields.io/badge/Dedup-Persistent-14B8A6?style=flat-square)
-![Recency](https://img.shields.io/badge/Recency-90%20Days-2563EB?style=flat-square)
-![Scheduler](https://img.shields.io/badge/Scheduler-Timed%20Fetch-7C3AED?style=flat-square)
-![Bilingual](https://img.shields.io/badge/LLM-Bilingual-0891B2?style=flat-square)
-![Docker](https://img.shields.io/badge/Docker-One%20Command-0EA5E9?style=flat-square)
+![AI Paper Radar](https://img.shields.io/badge/AI%20Paper%20Radar-Research%20Tracking-2563EB?style=flat-square)
+![AI Frontier Radar](https://img.shields.io/badge/AI%20Frontier%20Radar-Model%20Releases-0EA5E9?style=flat-square)
+![AI Finance](https://img.shields.io/badge/AI%20Finance-Global%20Markets-0891B2?style=flat-square)
+![AI Industry Reports](https://img.shields.io/badge/AI%20Industry%20Reports-Institutional%20Insights-14B8A6?style=flat-square)
+![AI Policy and Safety](https://img.shields.io/badge/AI%20Policy%20%26%20Safety-Regulation%20%26%20Risk-7C3AED?style=flat-square)
+![AI OSS Signals](https://img.shields.io/badge/AI%20OSS%20Signals-Developer%20Ecosystem-1D4ED8?style=flat-square)
+![Subscription Push](https://img.shields.io/badge/Subscription%20Push-Multi%20Channel-0F766E?style=flat-square)
 
 <p align="center">
   <img src="docs/assets/omnihawk.svg" alt="OmniHawk AI emblem" width="920" />

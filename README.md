@@ -25,15 +25,15 @@
 ![Slack](https://img.shields.io/badge/Slack-通知-4A154B?style=flat-square)
 ![Email](https://img.shields.io/badge/Email-通知-6366F1?style=flat-square)
 
-**🏷️ 核心标签**
+**🏷️ 重要标签**
 
-![6 Pages](https://img.shields.io/badge/6%20Pages-独立并列-0EA5E9?style=flat-square)
-![MCP Tools](https://img.shields.io/badge/MCP%20Tools-22-111827?style=flat-square)
-![Dedupe](https://img.shields.io/badge/Dedup-持久化去重-14B8A6?style=flat-square)
-![Recency](https://img.shields.io/badge/Recency-90%20Days-2563EB?style=flat-square)
-![Scheduler](https://img.shields.io/badge/Scheduler-定时抓取-7C3AED?style=flat-square)
-![Bilingual](https://img.shields.io/badge/LLM-中英双语摘要-0891B2?style=flat-square)
-![Docker](https://img.shields.io/badge/Docker-一键部署-0EA5E9?style=flat-square)
+![AI论文雷达](https://img.shields.io/badge/AI论文雷达-学术追踪-2563EB?style=flat-square)
+![AI前沿雷达](https://img.shields.io/badge/AI前沿雷达-模型发布-0EA5E9?style=flat-square)
+![AI财经信息](https://img.shields.io/badge/AI财经信息-全球市场-0891B2?style=flat-square)
+![AI产业报告](https://img.shields.io/badge/AI产业报告-机构研究-14B8A6?style=flat-square)
+![AI政策与安全](https://img.shields.io/badge/AI政策与安全-监管与风险-7C3AED?style=flat-square)
+![AI开源生态](https://img.shields.io/badge/AI开源生态-开发者信号-1D4ED8?style=flat-square)
+![订阅推送](https://img.shields.io/badge/订阅推送-多渠道触达-0F766E?style=flat-square)
 
 <p align="center">
   <img src="docs/assets/omnihawk.svg" alt="OmniHawk AI emblem" width="920" />
