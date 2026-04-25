@@ -13,6 +13,28 @@ fetch, dedupe, analyze, subscribe, and push from one platform, with MCP + CLI in
 [![CLI](https://img.shields.io/badge/Agent_CLI-Ready-0ea5e9?style=for-the-badge)](#agent-cli-new)
 [![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)](LICENSE)
 
+**📣 Subscription Push Channels**
+
+![Feishu](https://img.shields.io/badge/Feishu-Notify-00C95A?style=flat-square)
+![WeCom](https://img.shields.io/badge/WeCom-Notify-00A1FF?style=flat-square)
+![WeChat](https://img.shields.io/badge/WeChat-Notify-05C160?style=flat-square)
+![Telegram](https://img.shields.io/badge/Telegram-Notify-2AABEE?style=flat-square)
+![DingTalk](https://img.shields.io/badge/DingTalk-Notify-1677FF?style=flat-square)
+![ntfy](https://img.shields.io/badge/ntfy-Notify-5B7FFF?style=flat-square)
+![Bark](https://img.shields.io/badge/Bark-Notify-FF7A59?style=flat-square)
+![Slack](https://img.shields.io/badge/Slack-Notify-4A154B?style=flat-square)
+![Email](https://img.shields.io/badge/Email-Notify-6366F1?style=flat-square)
+
+**🏷️ Core Tags**
+
+![6 Pages](https://img.shields.io/badge/6%20Pages-Independent-0EA5E9?style=flat-square)
+![MCP Tools](https://img.shields.io/badge/MCP%20Tools-22-111827?style=flat-square)
+![Dedupe](https://img.shields.io/badge/Dedup-Persistent-14B8A6?style=flat-square)
+![Recency](https://img.shields.io/badge/Recency-90%20Days-2563EB?style=flat-square)
+![Scheduler](https://img.shields.io/badge/Scheduler-Timed%20Fetch-7C3AED?style=flat-square)
+![Bilingual](https://img.shields.io/badge/LLM-Bilingual-0891B2?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-One%20Command-0EA5E9?style=flat-square)
+
 <p align="center">
   <img src="docs/assets/omnihawk.svg" alt="OmniHawk AI emblem" width="920" />
 </p>
@@ -41,7 +63,7 @@ AI signals are highly fragmented and move fast. Manual tracking usually breaks d
 ## 🧭 Six Independent Pages (Parallel, Not Nested)
 | Page | Main Use | Typical Sources |
 | --- | --- | --- |
-| Paper Radar | Academic tracking and deep paper analysis | arXiv and research feeds |
+| AI Paper Radar | Academic tracking and deep paper analysis | arXiv and research feeds |
 | AI Frontier | Model, product, and technology updates | official sites, vendor blogs, labs |
 | AI Finance | Capital market and company intelligence | earnings, call transcripts, market feeds, financing/M&A |
 | AI Industry Reports | Industry and institutional research | global think tanks, institutions, whitepapers |
