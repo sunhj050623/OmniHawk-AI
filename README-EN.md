@@ -125,7 +125,7 @@ omnihawk-ai
 
 2. Run the interactive Web console (6-page UI):
 ```bash
-python -m trendradar.web.panel_server --port 8080 --output-dir output
+python -m omnihawk_ai.web.panel_server --port 8080 --output-dir output
 ```
 
 3. Start MCP service (HTTP):
@@ -343,7 +343,7 @@ Implemented consistently across backend + frontend + MCP + CLI:
 ## 🗂️ Project Structure
 ```text
 .
-├─ trendradar/                # Core runtime (fetch/analyze/push/web)
+├─ omnihawk_ai/                # Core runtime (fetch/analyze/push/web)
 │  ├─ __main__.py             # Main entry
 │  ├─ agent_cli.py            # Agent CLI entry (new)
 │  └─ web/panel_server.py     # Interactive console server
@@ -377,13 +377,6 @@ Start with:
 omnihawk-ai-cli call get_project_overview
 ```
 Then call `list_scope_items` / `list_papers` / `run_*_subscriptions` as needed.
-
----
-
-## 🧭 Roadmap and Contribution
-- Roadmap: [ROADMAP.md](ROADMAP.md)
-- Expansion plan: [docs/EXPANSION-PLAN-ZH.md](docs/EXPANSION-PLAN-ZH.md)
-- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 

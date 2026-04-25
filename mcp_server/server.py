@@ -1,4 +1,4 @@
-﻿"""OmniHawk AI MCP Server.
+"""OmniHawk AI MCP Server.
 
 Expose OmniHawk AI's current 6-page intelligence capabilities through MCP:
 - Paper Radar
@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 
-from trendradar.web.panel_server import (
+from omnihawk_ai.web.panel_server import (
     DashboardHandler,
     DeepAnalysisService,
     PanelActionStore,
@@ -43,7 +43,7 @@ from trendradar.web.panel_server import (
     parse_bool_text,
     parse_int_value,
 )
-from trendradar.web.progress_repo import AIProgressRepository
+from omnihawk_ai.web.progress_repo import AIProgressRepository
 
 from . import __version__
 
