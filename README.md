@@ -36,7 +36,7 @@
 ![订阅推送](https://img.shields.io/badge/订阅推送-多渠道触达-0F766E?style=flat-square)
 
 <p align="center">
-  <img src="docs/assets/omnihawk.svg" alt="OmniHawk AI emblem" width="920" />
+  <img src="image.png" alt="OmniHawk AI project banner" width="920" />
 </p>
 
 **中文** | [English](README-EN.md)

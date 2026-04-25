@@ -36,7 +36,7 @@ fetch, dedupe, analyze, subscribe, and push from one platform, with MCP + CLI in
 ![Subscription Push](https://img.shields.io/badge/Subscription%20Push-Multi%20Channel-0F766E?style=flat-square)
 
 <p align="center">
-  <img src="docs/assets/omnihawk.svg" alt="OmniHawk AI emblem" width="920" />
+  <img src="image.png" alt="OmniHawk AI project banner" width="920" />
 </p>
 
 [中文](README.md) | **English**
