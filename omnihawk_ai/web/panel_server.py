@@ -93,6 +93,9 @@ NOTIFY_CHANNELS: Tuple[str, ...] = (
 NOTIFY_CHANNEL_SET = set(NOTIFY_CHANNELS)
 NOTIFY_CHANNEL_DEFAULT = "feishu"
 DEFAULT_NTFY_SERVER_URL = "https://ntfy.sh"
+SUBSCRIPTION_STRATEGIES: Tuple[str, ...] = ("daily", "incremental", "realtime")
+SUBSCRIPTION_STRATEGY_SET = set(SUBSCRIPTION_STRATEGIES)
+SUBSCRIPTION_STRATEGY_DEFAULT = "incremental"
 ARXIV_PRIMARY_CATEGORIES = [
     "cs.AI",
     "cs.CL",
@@ -261,6 +264,38 @@ def normalize_notify_channel(value: Any, default: str = NOTIFY_CHANNEL_DEFAULT) 
     return channel
 
 
+def normalize_subscription_strategy(
+    value: Any,
+    default: str = SUBSCRIPTION_STRATEGY_DEFAULT,
+) -> str:
+    raw = str(value or "").strip().lower()
+    alias = {
+        "daily": "daily",
+        "incremental": "incremental",
+        "inc": "incremental",
+        "real-time": "realtime",
+        "real_time": "realtime",
+        "realtime": "realtime",
+    }
+    normalized = alias.get(raw, raw)
+    fallback = str(default or SUBSCRIPTION_STRATEGY_DEFAULT).strip().lower()
+    if fallback not in SUBSCRIPTION_STRATEGY_SET:
+        fallback = SUBSCRIPTION_STRATEGY_DEFAULT
+    if normalized not in SUBSCRIPTION_STRATEGY_SET:
+        normalized = fallback
+    return normalized
+
+
+def subscription_strategy_label(strategy: Any) -> str:
+    key = normalize_subscription_strategy(strategy, default=SUBSCRIPTION_STRATEGY_DEFAULT)
+    labels = {
+        "daily": "daily 当日汇总",
+        "incremental": "incremental 增量监控",
+        "realtime": "real-time 实时告警",
+    }
+    return labels.get(key, labels[SUBSCRIPTION_STRATEGY_DEFAULT])
+
+
 def to_runtime_model_name(value: str, api_base: str = "") -> str:
     model = str(value or "").strip()
     if not model:
@@ -273,12 +308,70 @@ def to_runtime_model_name(value: str, api_base: str = "") -> str:
 
 
 def normalize_analysis_language(value: Any, default: str = "Chinese") -> str:
-    text = str(value or "").strip().lower()
-    if text in {"en", "en-us", "english"}:
-        return "English"
-    if text in {"zh", "zh-cn", "chinese", "中文"}:
-        return "Chinese"
-    return default if default in {"Chinese", "English"} else "Chinese"
+    alias: Dict[str, str] = {
+        "en": "English",
+        "en-us": "English",
+        "english": "English",
+        "zh": "Chinese",
+        "zh-cn": "Chinese",
+        "zh-hans": "Chinese",
+        "chinese": "Chinese",
+        "simplified-chinese": "Chinese",
+        "zh-hant": "Traditional Chinese",
+        "zh-tw": "Traditional Chinese",
+        "zh-hk": "Traditional Chinese",
+        "traditional-chinese": "Traditional Chinese",
+        "ko": "Korean",
+        "korean": "Korean",
+        "ja": "Japanese",
+        "japanese": "Japanese",
+        "fr": "French",
+        "french": "French",
+    }
+    fallback = str(default or "").strip()
+    raw = str(value or "").strip()
+    candidate = raw or fallback
+    if not candidate:
+        return ""
+    lookup = candidate.lower().replace("_", "-")
+    if lookup in alias:
+        return alias[lookup]
+    if not raw and fallback:
+        fallback_mapped = alias.get(fallback.lower().replace("_", "-"), "")
+        if fallback_mapped:
+            return fallback_mapped
+    if candidate == candidate.upper() and len(candidate) <= 8:
+        return candidate
+    return " ".join(part[:1].upper() + part[1:] for part in candidate.split())
+
+
+def language_cache_key(value: Any) -> str:
+    normalized = normalize_analysis_language(value, default="")
+    if not normalized:
+        return "zh"
+    lookup = normalized.lower().replace("_", "-")
+    alias = {
+        "english": "en",
+        "chinese": "zh",
+        "traditional chinese": "zh-hant",
+        "korean": "ko",
+        "japanese": "ja",
+        "french": "fr",
+    }
+    mapped = alias.get(lookup)
+    if mapped:
+        return mapped
+    safe = re.sub(r"[^a-z0-9\\-]+", "-", lookup).strip("-")
+    return safe or "zh"
+
+
+def is_english_language(value: Any) -> bool:
+    return language_cache_key(value) == "en"
+
+
+def is_chinese_language(value: Any) -> bool:
+    key = language_cache_key(value)
+    return key == "zh" or key.startswith("zh-")
 
 
 def split_subtopics(value: str) -> List[str]:
@@ -374,6 +467,112 @@ def parse_iso_utc(value: Any) -> Optional[datetime]:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+def has_any_keyword(text: Any, keywords: List[str]) -> bool:
+    content = str(text or "").lower()
+    if not content:
+        return False
+    return any(str(word or "").strip().lower() in content for word in keywords if str(word or "").strip())
+
+
+def is_realtime_priority_progress_item(item: Dict[str, Any], scope: str) -> bool:
+    event_type = str(item.get("event_type", "") or "").strip().lower()
+    if event_type in {"release", "benchmark", "safety"}:
+        return True
+    title = str(item.get("title", "") or "")
+    summary = str(item.get("summary", "") or "")
+    tags = item.get("tags") if isinstance(item.get("tags"), list) else []
+    tag_text = " ".join(str(x or "") for x in tags)
+    content = " ".join([title, summary, tag_text]).lower()
+
+    if scope == "market_finance":
+        finance_keywords = [
+            "earnings",
+            "guidance",
+            "capex",
+            "funding",
+            "raised",
+            "raises",
+            "融资",
+            "并购",
+            "merger",
+            "acquisition",
+            "m&a",
+            "ipo",
+        ]
+        return has_any_keyword(content, finance_keywords)
+
+    if scope == "policy_safety":
+        policy_keywords = [
+            "regulation",
+            "policy",
+            "law",
+            "act",
+            "compliance",
+            "ban",
+            "governance",
+            "政策",
+            "监管",
+            "合规",
+            "安全",
+        ]
+        return has_any_keyword(content, policy_keywords)
+
+    if scope == "industry_report":
+        report_keywords = [
+            "report",
+            "white paper",
+            "forecast",
+            "outlook",
+            "survey",
+            "报告",
+            "白皮书",
+            "展望",
+        ]
+        return has_any_keyword(content, report_keywords)
+
+    if scope in {"frontier", "oss_signal"}:
+        return has_any_keyword(
+            content,
+            [
+                "gpt-",
+                "claude",
+                "gemini",
+                "qwen",
+                "deepseek",
+                "glm",
+                "llama",
+                "mistral",
+                "open source",
+                "开源",
+            ],
+        )
+    return False
+
+
+def is_realtime_priority_paper(paper: Dict[str, Any]) -> bool:
+    score = parse_int_value(paper.get("recommendation_score"), 0, 100) or 0
+    title = str(paper.get("title", "") or "")
+    abstract = str(paper.get("abstract", "") or "")
+    content = f"{title} {abstract}".lower()
+    conference_keywords = [
+        "neurips",
+        "icml",
+        "iclr",
+        "cvpr",
+        "eccv",
+        "iccv",
+        "acl",
+        "emnlp",
+        "naacl",
+        "kdd",
+        "aaai",
+    ]
+    top_conf = has_any_keyword(content, conference_keywords)
+    if top_conf and score >= 60:
+        return True
+    return score >= 85
 
 
 class PanelSettingsStore:
@@ -680,6 +879,9 @@ class PanelSubscriptionStore:
             "enabled": bool(item.get("enabled", True)) if isinstance(item, dict) else True,
             "filters": filters,
             "mode": str(item.get("mode", "all") or "all").strip().lower() if isinstance(item, dict) else "all",
+            "strategy": normalize_subscription_strategy(item.get("strategy"), default=SUBSCRIPTION_STRATEGY_DEFAULT)
+            if isinstance(item, dict)
+            else SUBSCRIPTION_STRATEGY_DEFAULT,
             "sort_by": str(item.get("sort_by", "score") or "score").strip().lower()
             if isinstance(item, dict)
             else "score",
@@ -702,6 +904,10 @@ class PanelSubscriptionStore:
             normalized["channel"] = NOTIFY_CHANNEL_DEFAULT
         if normalized["mode"] not in {"all", "favorites", "ignored"}:
             normalized["mode"] = "all"
+        normalized["strategy"] = normalize_subscription_strategy(
+            normalized.get("strategy"),
+            default=SUBSCRIPTION_STRATEGY_DEFAULT,
+        )
         if normalized["sort_by"] not in {"score", "time", "title"}:
             normalized["sort_by"] = "score"
         if normalized["sort_order"] not in {"asc", "desc"}:
@@ -756,6 +962,10 @@ class PanelSubscriptionStore:
                 channel=str(item.get("channel", NOTIFY_CHANNEL_DEFAULT) or NOTIFY_CHANNEL_DEFAULT),
                 filters=item.get("filters") if isinstance(item.get("filters"), dict) else {},
                 mode=str(item.get("mode", "all") or "all"),
+                strategy=normalize_subscription_strategy(
+                    item.get("strategy"),
+                    default=SUBSCRIPTION_STRATEGY_DEFAULT,
+                ),
                 sort_by=str(item.get("sort_by", "score") or "score"),
                 sort_order=str(item.get("sort_order", "desc") or "desc"),
                 history=str(item.get("history", "all") or "all"),
@@ -774,6 +984,7 @@ class PanelSubscriptionStore:
         channel: str,
         filters: Dict[str, Any],
         mode: str,
+        strategy: str,
         sort_by: str,
         sort_order: str,
         history: str,
@@ -783,6 +994,7 @@ class PanelSubscriptionStore:
             "channel": str(channel or NOTIFY_CHANNEL_DEFAULT).strip().lower(),
             "filters": normalize_panel_filters(filters if isinstance(filters, dict) else {}),
             "mode": str(mode or "all").strip().lower(),
+            "strategy": normalize_subscription_strategy(strategy, default=SUBSCRIPTION_STRATEGY_DEFAULT),
             "sort_by": str(sort_by or "score").strip().lower(),
             "sort_order": str(sort_order or "desc").strip().lower(),
             "history": str(history or "all").strip().lower(),
@@ -820,6 +1032,7 @@ class PanelSubscriptionStore:
         enabled: bool = True,
         sub_id: str = "",
         mode: str = "all",
+        strategy: str = SUBSCRIPTION_STRATEGY_DEFAULT,
         sort_by: str = "score",
         sort_order: str = "desc",
         history: str = "all",
@@ -834,6 +1047,7 @@ class PanelSubscriptionStore:
                 channel=channel,
                 filters=filters,
                 mode=mode,
+                strategy=strategy,
                 sort_by=sort_by,
                 sort_order=sort_order,
                 history=history,
@@ -849,6 +1063,10 @@ class PanelSubscriptionStore:
                         channel=str(item.get("channel", NOTIFY_CHANNEL_DEFAULT) or NOTIFY_CHANNEL_DEFAULT),
                         filters=item.get("filters") if isinstance(item.get("filters"), dict) else {},
                         mode=str(item.get("mode", "all") or "all"),
+                        strategy=normalize_subscription_strategy(
+                            item.get("strategy"),
+                            default=SUBSCRIPTION_STRATEGY_DEFAULT,
+                        ),
                         sort_by=str(item.get("sort_by", "score") or "score"),
                         sort_order=str(item.get("sort_order", "desc") or "desc"),
                         history=str(item.get("history", "all") or "all"),
@@ -866,6 +1084,7 @@ class PanelSubscriptionStore:
                         "filters": filters,
                         "enabled": enabled,
                         "mode": mode,
+                        "strategy": strategy,
                         "sort_by": sort_by,
                         "sort_order": sort_order,
                         "history": history,
@@ -884,6 +1103,7 @@ class PanelSubscriptionStore:
                         "filters": filters,
                         "enabled": enabled,
                         "mode": mode,
+                        "strategy": strategy,
                         "sort_by": sort_by,
                         "sort_order": sort_order,
                         "history": history,
@@ -960,6 +1180,7 @@ class ProgressPageSettingsStore:
             "source_ids": [],
             "notify_channel": NOTIFY_CHANNEL_DEFAULT,
             "notify_limit": 8,
+            "output_language": "Chinese",
             "feishu_webhook_url": "",
             "wework_webhook_url": "",
             "wework_msg_type": "markdown",
@@ -1005,6 +1226,7 @@ class ProgressPageSettingsStore:
         base["source_ids"] = source_ids
         base["notify_channel"] = normalize_notify_channel(incoming.get("notify_channel"))
         base["notify_limit"] = parse_int_value(incoming.get("notify_limit"), 1, 30) or 8
+        base["output_language"] = normalize_analysis_language(incoming.get("output_language", "Chinese"), default="Chinese")
         base["feishu_webhook_url"] = str(incoming.get("feishu_webhook_url", "") or "").strip()
         base["wework_webhook_url"] = str(incoming.get("wework_webhook_url", "") or "").strip()
         wework_msg_type = str(incoming.get("wework_msg_type", "markdown") or "markdown").strip().lower()
@@ -1133,6 +1355,9 @@ class ProgressSubscriptionStore:
             "channel": channel,
             "enabled": bool(item.get("enabled", True)) if isinstance(item, dict) else True,
             "filters": filters,
+            "strategy": normalize_subscription_strategy(item.get("strategy"), default=SUBSCRIPTION_STRATEGY_DEFAULT)
+            if isinstance(item, dict)
+            else SUBSCRIPTION_STRATEGY_DEFAULT,
             "limit": parse_int_value(item.get("limit"), 1, 500) if isinstance(item, dict) else 120,
             "created_at": str(item.get("created_at", "") or "").strip() if isinstance(item, dict) else "",
             "updated_at": str(item.get("updated_at", "") or "").strip() if isinstance(item, dict) else "",
@@ -1142,6 +1367,10 @@ class ProgressSubscriptionStore:
         }
         if not normalized["limit"]:
             normalized["limit"] = 120
+        normalized["strategy"] = normalize_subscription_strategy(
+            normalized.get("strategy"),
+            default=SUBSCRIPTION_STRATEGY_DEFAULT,
+        )
         if not normalized["id"]:
             normalized["id"] = uuid.uuid4().hex[:12]
         if not normalized["name"]:
@@ -1172,12 +1401,14 @@ class ProgressSubscriptionStore:
         scope: str,
         channel: str,
         filters: Dict[str, Any],
+        strategy: str,
         limit: int,
     ) -> str:
         payload = {
             "scope": normalize_progress_scope(scope, default="frontier"),
             "channel": str(channel or NOTIFY_CHANNEL_DEFAULT).strip().lower(),
             "filters": normalize_progress_filters(filters if isinstance(filters, dict) else {}),
+            "strategy": normalize_subscription_strategy(strategy, default=SUBSCRIPTION_STRATEGY_DEFAULT),
             "limit": parse_int_value(limit, 1, 500) or 120,
         }
         return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -1203,6 +1434,10 @@ class ProgressSubscriptionStore:
                 scope=str(item.get("scope", "frontier") or "frontier"),
                 channel=str(item.get("channel", NOTIFY_CHANNEL_DEFAULT) or NOTIFY_CHANNEL_DEFAULT),
                 filters=item.get("filters") if isinstance(item.get("filters"), dict) else {},
+                strategy=normalize_subscription_strategy(
+                    item.get("strategy"),
+                    default=SUBSCRIPTION_STRATEGY_DEFAULT,
+                ),
                 limit=parse_int_value(item.get("limit"), 1, 500) or 120,
             )
             old = by_signature.get(signature)
@@ -1255,6 +1490,7 @@ class ProgressSubscriptionStore:
         filters: Dict[str, Any],
         enabled: bool = True,
         limit: int = 120,
+        strategy: str = SUBSCRIPTION_STRATEGY_DEFAULT,
         sub_id: str = "",
     ) -> Dict[str, Any]:
         with self._lock:
@@ -1275,6 +1511,7 @@ class ProgressSubscriptionStore:
                     scope=scope_key,
                     channel=channel,
                     filters=filters,
+                    strategy=strategy,
                     limit=limit,
                 )
                 for i, item in enumerate(items):
@@ -1282,6 +1519,10 @@ class ProgressSubscriptionStore:
                         scope=str(item.get("scope", "frontier") or "frontier"),
                         channel=str(item.get("channel", "feishu") or "feishu"),
                         filters=item.get("filters") if isinstance(item.get("filters"), dict) else {},
+                        strategy=normalize_subscription_strategy(
+                            item.get("strategy"),
+                            default=SUBSCRIPTION_STRATEGY_DEFAULT,
+                        ),
                         limit=parse_int_value(item.get("limit"), 1, 500) or 120,
                     )
                     if sig == target_sig:
@@ -1297,6 +1538,7 @@ class ProgressSubscriptionStore:
                         "filters": filters,
                         "enabled": enabled,
                         "limit": limit,
+                        "strategy": strategy,
                         "updated_at": now,
                     }
                 )
@@ -1312,6 +1554,7 @@ class ProgressSubscriptionStore:
                         "filters": filters,
                         "enabled": enabled,
                         "limit": limit,
+                        "strategy": strategy,
                         "created_at": now,
                         "updated_at": now,
                     }
@@ -1575,6 +1818,7 @@ class CrawlRunner:
         self.workdir = workdir
         self.settings_store = settings_store
         self._lock = threading.Lock()
+        self._on_finished_callbacks: List[Any] = []
         self._process: Optional[subprocess.Popen[str]] = None
         self._running = False
         self._started_at = ""
@@ -1726,6 +1970,12 @@ class CrawlRunner:
             watcher.start()
             return True, "crawl started"
 
+    def add_on_finished_callback(self, callback: Any) -> None:
+        if not callable(callback):
+            return
+        with self._lock:
+            self._on_finished_callbacks.append(callback)
+
     def _detect_existing_crawl_pid(self) -> Optional[int]:
         """
         Detect external `python -m omnihawk_ai` process to avoid duplicate runs.
@@ -1775,6 +2025,8 @@ class CrawlRunner:
             exit_code = -1
             self._append_log(f"[error] watcher exception: {exc}")
 
+        callbacks: List[Any] = []
+        result_payload: Dict[str, Any] = {}
         with self._lock:
             self._running = False
             self._finished_at = utc_now_iso()
@@ -1788,6 +2040,19 @@ class CrawlRunner:
             if len(self._logs) > MAX_LOG_LINES:
                 self._logs = self._logs[-MAX_LOG_LINES:]
             self._process = None
+            callbacks = list(self._on_finished_callbacks)
+            result_payload = {
+                "ok": exit_code == 0,
+                "exit_code": exit_code,
+                "started_at": self._started_at,
+                "finished_at": self._finished_at,
+            }
+
+        for callback in callbacks:
+            try:
+                callback(dict(result_payload))
+            except Exception as exc:
+                self._append_log(f"[warning] crawl finished callback failed: {type(exc).__name__}: {exc}")
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -2256,75 +2521,125 @@ class PaperRepository:
             return [v.strip() for v in value.split(",") if v.strip()]
         return []
 
+    def _paper_i18n_map(self, insight: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        raw = insight.get("i18n") if isinstance(insight.get("i18n"), dict) else {}
+        out: Dict[str, Dict[str, Any]] = {}
+        for key, value in raw.items():
+            lang_key = language_cache_key(str(key or ""))
+            if not lang_key or not isinstance(value, dict):
+                continue
+            out[lang_key] = dict(value)
+        return out
+
+    def _paper_i18n_entry(self, insight: Dict[str, Any], output_language: str) -> Dict[str, Any]:
+        lang_key = language_cache_key(output_language)
+        return self._paper_i18n_map(insight).get(lang_key, {})
+
+    def _paper_deep_i18n_entry(self, insight: Dict[str, Any], output_language: str) -> Dict[str, Any]:
+        raw = insight.get("deep_analysis_i18n") if isinstance(insight.get("deep_analysis_i18n"), dict) else {}
+        lang_key = language_cache_key(output_language)
+        value = raw.get(lang_key) if isinstance(raw.get(lang_key), dict) else {}
+        return dict(value) if isinstance(value, dict) else {}
+
     def _pick_localized_title(self, title: str, insight: Dict[str, Any], output_language: str) -> str:
         lang = normalize_analysis_language(output_language, default="Chinese")
+        base = str(title or "").strip()
+        mapped = self._paper_i18n_entry(insight, lang)
+        mapped_title = str(mapped.get("title", "") or "").strip()
+        if mapped_title:
+            return mapped_title
         title_zh = str(insight.get("title_zh", "") or "").strip()
         title_en = str(insight.get("title_en", "") or "").strip()
-        base = str(title or "").strip()
-        if lang == "English":
+        if is_english_language(lang):
             if title_en:
                 return title_en
             if base and not looks_like_chinese_text(base):
                 return base
             return base
-        if title_zh:
-            return title_zh
-        if base and looks_like_chinese_text(base):
+        if is_chinese_language(lang):
+            if title_zh:
+                return title_zh
+            if base and looks_like_chinese_text(base):
+                return base
             return base
         return base
 
     def _pick_localized_insight_text(self, insight: Dict[str, Any], key: str, output_language: str) -> str:
         lang = normalize_analysis_language(output_language, default="Chinese")
+        mapped = self._paper_i18n_entry(insight, lang)
+        mapped_text = str(mapped.get(key, "") or "").strip()
+        if mapped_text:
+            return mapped_text
+
         base = str(insight.get(key, "") or "").strip()
         zh_val = str(insight.get(f"{key}_zh", "") or "").strip()
         en_val = str(insight.get(f"{key}_en", "") or "").strip()
-        if lang == "English":
+        if is_english_language(lang):
             if en_val:
                 return en_val
             if base and not looks_like_chinese_text(base):
                 return base
             return ""
-        if zh_val:
-            return zh_val
-        if base and looks_like_chinese_text(base):
-            return base
+        if is_chinese_language(lang):
+            if zh_val:
+                return zh_val
+            if base and looks_like_chinese_text(base):
+                return base
+            return ""
         return ""
 
     def _pick_localized_keywords(self, insight: Dict[str, Any], output_language: str) -> List[str]:
         lang = normalize_analysis_language(output_language, default="Chinese")
+        mapped = self._paper_i18n_entry(insight, lang)
+        mapped_keywords = self._normalize_keyword_list(mapped.get("keywords"))
+        if mapped_keywords:
+            return mapped_keywords
+
         base_vals = self._normalize_keyword_list(insight.get("keywords"))
         zh_vals = self._normalize_keyword_list(insight.get("keywords_zh"))
         en_vals = self._normalize_keyword_list(insight.get("keywords_en"))
-        if lang == "English":
+        if is_english_language(lang):
             if en_vals:
                 return en_vals
             if base_vals and not any(looks_like_chinese_text(x) for x in base_vals):
                 return base_vals
             return []
-        if zh_vals:
-            return zh_vals
-        if base_vals and any(looks_like_chinese_text(x) for x in base_vals):
-            return base_vals
+        if is_chinese_language(lang):
+            if zh_vals:
+                return zh_vals
+            if base_vals and any(looks_like_chinese_text(x) for x in base_vals):
+                return base_vals
+            return []
         return []
 
     def _select_deep_analysis_by_language(self, insight: Dict[str, Any], output_language: str) -> Dict[str, Any]:
         lang = normalize_analysis_language(output_language, default="Chinese")
+        mapped = self._paper_deep_i18n_entry(insight, lang)
+        if mapped:
+            return mapped
+
         deep_default = insight.get("deep_analysis") if isinstance(insight.get("deep_analysis"), dict) else {}
         deep_zh = insight.get("deep_analysis_zh") if isinstance(insight.get("deep_analysis_zh"), dict) else {}
         deep_en = insight.get("deep_analysis_en") if isinstance(insight.get("deep_analysis_en"), dict) else {}
-        if lang == "English":
+        if is_english_language(lang):
             if deep_en:
                 return deep_en
             if isinstance(deep_default, dict) and deep_default:
                 deep_lang = normalize_analysis_language(deep_default.get("language", ""), default="")
-                if deep_lang == "English":
+                if is_english_language(deep_lang):
                     return deep_default
             return {}
-        if deep_zh:
-            return deep_zh
+        if is_chinese_language(lang):
+            if deep_zh:
+                return deep_zh
+            if isinstance(deep_default, dict) and deep_default:
+                deep_lang = normalize_analysis_language(deep_default.get("language", ""), default="")
+                if is_chinese_language(deep_lang):
+                    return deep_default
+            return {}
         if isinstance(deep_default, dict) and deep_default:
             deep_lang = normalize_analysis_language(deep_default.get("language", ""), default="")
-            if deep_lang == "Chinese":
+            if language_cache_key(deep_lang) == language_cache_key(lang):
                 return deep_default
         return {}
 
@@ -3484,8 +3799,8 @@ class DeepAnalysisService:
             output_language,
             default=normalize_analysis_language(settings.get("analysis_language", "Chinese"), default="Chinese"),
         )
-        is_english = analysis_language == "English"
-        output_language_text = "English" if is_english else "中文"
+        is_english = is_english_language(analysis_language)
+        output_language_text = analysis_language or "Chinese"
         if not runtime_model:
             return {"ok": False, "error": "LLM 模型未配置"}
         if not api_key:
@@ -3566,9 +3881,7 @@ class DeepAnalysisService:
         if len(template_text) > 20000:
             template_text = template_text[:20000]
         language_rule_line = (
-            "4.1) 所有文本字段必须使用英文，不得夹杂中文。\n"
-            if is_english
-            else "4.1) 所有文本字段必须使用中文，不得夹杂英文句子。\n"
+            f"4.1) 所有文本字段必须使用 {output_language_text}，不得混入其它语言句子。\n"
         )
 
         user_prompt = (
@@ -4055,9 +4368,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 merged[key] = value
         return merged
 
-    def _run_progress_subscription(self, sub: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_progress_subscription(
+        self,
+        sub: Dict[str, Any],
+        *,
+        trigger_mode: str = "manual",
+        changed_key_set: Optional[set[str]] = None,
+    ) -> Dict[str, Any]:
         sub_id = str(sub.get("id", "") or "").strip()
         scope = normalize_progress_scope(sub.get("scope", "frontier"), default="frontier")
+        strategy = normalize_subscription_strategy(
+            sub.get("strategy"),
+            default=SUBSCRIPTION_STRATEGY_DEFAULT,
+        )
         filters = normalize_progress_filters(sub.get("filters") if isinstance(sub, dict) else {})
         limit = parse_int_value(sub.get("limit"), 1, 500) or 120
         kind = self._progress_kind_for_scope(scope)
@@ -4088,35 +4411,93 @@ class DashboardHandler(BaseHTTPRequestHandler):
             fresh_items.append(row)
             fresh_keys.append(key)
 
+        selected_items: List[Dict[str, Any]] = []
+        selected_keys: List[str] = []
+        if strategy == "daily":
+            for row in items:
+                if not isinstance(row, dict):
+                    continue
+                selected_items.append(row)
+                key = str(row.get("progress_key", "") or "").strip()
+                if key:
+                    selected_keys.append(key)
+        elif strategy == "realtime":
+            for row in fresh_items:
+                if not isinstance(row, dict):
+                    continue
+                key = str(row.get("progress_key", "") or "").strip()
+                if not key:
+                    continue
+                if changed_key_set and key not in changed_key_set:
+                    continue
+                if not is_realtime_priority_progress_item(row, scope):
+                    continue
+                selected_items.append(row)
+                selected_keys.append(key)
+        else:
+            selected_items = list(fresh_items)
+            selected_keys = list(fresh_keys)
+
+        scope_settings = self.progress_page_settings.get_scope(scope)
+        output_language = normalize_analysis_language(
+            scope_settings.get("output_language", "Chinese"),
+            default="Chinese",
+        )
         result: Dict[str, Any] = {
             "id": sub_id,
             "scope": scope,
             "name": str(sub.get("name", "") or "").strip(),
             "channel": str(sub.get("channel", "") or "").strip(),
+            "strategy": strategy,
+            "output_language": output_language,
+            "trigger_mode": str(trigger_mode or "manual").strip().lower() or "manual",
             "match_count": len(items),
             "new_count": len(fresh_items),
+            "push_count": len(selected_items),
             "ok": True,
             "message": "",
         }
-        if not fresh_items:
-            result["message"] = "无新增命中，无需推送"
+        if not selected_items:
+            if strategy == "daily":
+                result["message"] = "当日汇总无命中，跳过推送"
+            elif strategy == "realtime":
+                result["message"] = "无高优先级实时告警，跳过推送"
+            else:
+                result["message"] = "无新增命中，无需推送"
             return result
 
         settings = self._progress_notify_settings(scope)
-        msg_text = self._build_progress_payload_text(fresh_items)
+        msg_text = self._build_progress_payload_text(
+            selected_items,
+            strategy=strategy,
+            output_language=output_language,
+        )
+        msg_text = self._translate_notification_text_with_llm(
+            msg_text,
+            target_language=output_language,
+            settings=settings,
+        )
         ok, msg = self._send_subscription_notification(
             str(sub.get("channel", "") or "").strip(),
             settings,
             msg_text,
-            subject=f"[OmniHawk AI] {PROGRESS_SCOPE_NAME_MAP_ZH.get(scope, 'AI 资讯')} 订阅命中通知",
+            subject=f"[OmniHawk AI] {PROGRESS_SCOPE_NAME_MAP_ZH.get(scope, 'AI资讯')} {subscription_strategy_label(strategy)} 通知",
         )
         result["ok"] = ok
         result["message"] = msg
         if ok:
-            self.progress_subscriptions.mark_notified(sub_id, fresh_keys, len(items))
+            mark_keys = selected_keys if strategy in {"incremental", "realtime"} else []
+            self.progress_subscriptions.mark_notified(sub_id, mark_keys, len(items))
         return result
 
-    def _run_progress_subscriptions(self, scope: str, sub_id: str = "") -> Dict[str, Any]:
+    def _run_progress_subscriptions(
+        self,
+        scope: str,
+        sub_id: str = "",
+        *,
+        trigger_mode: str = "manual",
+        changed_keys: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         scope_key = normalize_progress_scope(scope, default="frontier")
         items = self.progress_subscriptions.list(scope_key)
         targets: List[Dict[str, Any]]
@@ -4124,13 +4505,52 @@ class DashboardHandler(BaseHTTPRequestHandler):
             targets = [row for row in items if str(row.get("id", "") or "") == str(sub_id or "").strip()]
         else:
             targets = [row for row in items if bool(row.get("enabled", True))]
+        mode = str(trigger_mode or "manual").strip().lower() or "manual"
+        if mode == "realtime":
+            targets = [
+                row
+                for row in targets
+                if normalize_subscription_strategy(
+                    row.get("strategy"),
+                    default=SUBSCRIPTION_STRATEGY_DEFAULT,
+                )
+                == "realtime"
+            ]
+        elif mode == "scheduled":
+            targets = [
+                row
+                for row in targets
+                if normalize_subscription_strategy(
+                    row.get("strategy"),
+                    default=SUBSCRIPTION_STRATEGY_DEFAULT,
+                )
+                != "realtime"
+            ]
         if not targets:
-            return {"ok": False, "error": "no subscription to run", "scope": scope_key, "results": []}
-        results = [self._run_progress_subscription(row) for row in targets]
+            empty_ok = mode in {"scheduled", "realtime"}
+            return {
+                "ok": empty_ok,
+                "error": "no subscription to run",
+                "scope": scope_key,
+                "trigger_mode": mode,
+                "results": [],
+                "success_count": 0,
+                "total": 0,
+            }
+        changed_key_set = {str(v).strip() for v in (changed_keys or []) if str(v).strip()}
+        results = [
+            self._run_progress_subscription(
+                row,
+                trigger_mode=mode,
+                changed_key_set=changed_key_set if changed_key_set else None,
+            )
+            for row in targets
+        ]
         success = sum(1 for row in results if row.get("ok"))
         return {
             "ok": success == len(results),
             "scope": scope_key,
+            "trigger_mode": mode,
             "results": results,
             "success_count": success,
             "total": len(results),
@@ -4156,15 +4576,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             text = str(key or "").strip()
             if text and text not in changed_keys:
                 changed_keys.append(text)
+        scope_settings = self.progress_page_settings.get_scope(scope_key)
+        output_language = normalize_analysis_language(
+            scope_settings.get("output_language", "Chinese"),
+            default="Chinese",
+        )
         if changed_keys:
             result["enrichment"] = self._translate_progress_items(
                 keys=changed_keys,
+                output_language=output_language,
                 force=False,
                 max_workers=2,
                 allow_skip_unconfigured=True,
             )
+            result["realtime_push"] = self._run_progress_subscriptions(
+                scope_key,
+                trigger_mode="realtime",
+                changed_keys=changed_keys,
+            )
         if auto_push:
-            result["auto_push"] = self._run_progress_subscriptions(scope_key)
+            result["auto_push"] = self._run_progress_subscriptions(scope_key, trigger_mode="scheduled")
         result["scope"] = scope_key
         result["kind"] = self._progress_kind_for_scope(scope_key)
         requested = str(requested_by or "manual").strip() or "manual"
@@ -4175,7 +4606,34 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.progress_page_settings.mark_auto_result(scope_key, ok=ok, message=msg)
         return result
 
-    def _build_progress_payload_text(self, items: List[Dict[str, Any]]) -> str:
+    def _pick_progress_localized_text(self, item: Dict[str, Any], field: str, output_language: str) -> str:
+        lang = normalize_analysis_language(output_language, default="Chinese")
+        lang_key = language_cache_key(lang)
+        i18n_map = item.get("i18n") if isinstance(item.get("i18n"), dict) else {}
+        i18n_entry = i18n_map.get(lang_key) if isinstance(i18n_map.get(lang_key), dict) else {}
+        mapped = str(i18n_entry.get(field, "") or "").strip() if isinstance(i18n_entry, dict) else ""
+        if mapped:
+            return mapped
+        if field == "title":
+            if is_chinese_language(lang):
+                return str(item.get("title_zh", "") or item.get("title", "") or "").strip()
+            return str(item.get("title", "") or item.get("title_zh", "") or "").strip()
+        if field == "summary":
+            if is_chinese_language(lang):
+                return str(item.get("summary_zh", "") or item.get("summary", "") or "").strip()
+            return str(item.get("summary", "") or item.get("summary_zh", "") or "").strip()
+        if field == "llm_takeaway":
+            if is_chinese_language(lang):
+                return str(item.get("llm_takeaway_zh", "") or item.get("llm_takeaway", "") or "").strip()
+            return str(item.get("llm_takeaway", "") or item.get("llm_takeaway_zh", "") or "").strip()
+        return ""
+
+    def _build_progress_payload_text(
+        self,
+        items: List[Dict[str, Any]],
+        strategy: str = SUBSCRIPTION_STRATEGY_DEFAULT,
+        output_language: str = "Chinese",
+    ) -> str:
         def clip_text(text: Any, limit: int) -> str:
             value = re.sub(r"\s+", " ", str(text or "").strip())
             if len(value) <= limit:
@@ -4192,21 +4650,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         lines: List[str] = []
         total = len(items)
-        lines.append(f"AI 技术进展命中 {total} 条")
+        strategy_key = normalize_subscription_strategy(strategy, default=SUBSCRIPTION_STRATEGY_DEFAULT)
+        lines.append(f"AI 技术进展 · {subscription_strategy_label(strategy_key)} · 命中 {total} 条")
         lines.append("")
 
         max_items = 8
         shown = items[:max_items]
         for idx, item in enumerate(shown, start=1):
-            title = clip_text(item.get("title_zh", "") or item.get("title", ""), 180)
+            title = clip_text(self._pick_progress_localized_text(item, "title", output_language), 180)
             org = str(item.get("org", "") or "").strip()
             source_name = str(item.get("source_name", "") or "").strip()
             published = str(item.get("published_at", "") or "").strip()
             published_short = published[:19] if published else ""
             event_type_raw = str(item.get("event_type", "") or "").strip().lower()
             event_type = event_map.get(event_type_raw, event_type_raw)
-            summary = clip_text(item.get("summary_zh", "") or item.get("summary", ""), 260)
-            takeaway = clip_text(item.get("llm_takeaway_zh", ""), 90)
+            summary = clip_text(self._pick_progress_localized_text(item, "summary", output_language), 260)
+            takeaway = clip_text(self._pick_progress_localized_text(item, "llm_takeaway", output_language), 90)
             url = str(item.get("url", "") or "").strip()
             tags = item.get("tags") if isinstance(item.get("tags"), list) else []
             tags = [str(x).strip() for x in tags if str(x).strip()]
@@ -4288,7 +4747,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     ) -> bool:
         if force:
             return True
-        suffix = "en" if target_language == "English" else "zh"
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        lang_key = language_cache_key(lang)
         raw_title = str((record or {}).get("title", "") or "").strip()
         raw_one_line = str(insight.get("one_sentence_summary") or insight.get("summary") or "").strip()
         raw_method = str(insight.get("method", "") or "").strip()
@@ -4296,14 +4756,36 @@ class DashboardHandler(BaseHTTPRequestHandler):
         raw_innovation = str(insight.get("innovation") or insight.get("novelty") or "").strip()
         raw_keywords = self._normalize_keyword_values(insight.get("keywords"))
 
-        localized_title = str(insight.get(f"title_{suffix}", "") or "").strip()
-        localized_one_line = str(insight.get(f"one_sentence_summary_{suffix}", "") or "").strip()
-        localized_method = str(insight.get(f"method_{suffix}", "") or "").strip()
-        localized_conclusion = str(insight.get(f"conclusion_{suffix}", "") or "").strip()
-        localized_innovation = str(insight.get(f"innovation_{suffix}", "") or "").strip()
-        localized_keywords = self._normalize_keyword_values(insight.get(f"keywords_{suffix}"))
+        localized_title = ""
+        localized_one_line = ""
+        localized_method = ""
+        localized_conclusion = ""
+        localized_innovation = ""
+        localized_keywords: List[str] = []
+        if is_english_language(lang):
+            localized_title = str(insight.get("title_en", "") or "").strip()
+            localized_one_line = str(insight.get("one_sentence_summary_en", "") or "").strip()
+            localized_method = str(insight.get("method_en", "") or "").strip()
+            localized_conclusion = str(insight.get("conclusion_en", "") or "").strip()
+            localized_innovation = str(insight.get("innovation_en", "") or "").strip()
+            localized_keywords = self._normalize_keyword_values(insight.get("keywords_en"))
+        elif is_chinese_language(lang):
+            localized_title = str(insight.get("title_zh", "") or "").strip()
+            localized_one_line = str(insight.get("one_sentence_summary_zh", "") or "").strip()
+            localized_method = str(insight.get("method_zh", "") or "").strip()
+            localized_conclusion = str(insight.get("conclusion_zh", "") or "").strip()
+            localized_innovation = str(insight.get("innovation_zh", "") or "").strip()
+            localized_keywords = self._normalize_keyword_values(insight.get("keywords_zh"))
+        else:
+            mapped = self._paper_i18n_map(insight).get(lang_key, {})
+            localized_title = str(mapped.get("title", "") or "").strip()
+            localized_one_line = str(mapped.get("one_sentence_summary", "") or "").strip()
+            localized_method = str(mapped.get("method", "") or "").strip()
+            localized_conclusion = str(mapped.get("conclusion", "") or "").strip()
+            localized_innovation = str(mapped.get("innovation", "") or "").strip()
+            localized_keywords = self._normalize_keyword_values(mapped.get("keywords"))
 
-        if target_language == "English":
+        if is_english_language(lang):
             title_ready = bool(localized_title) or bool(raw_title and not looks_like_chinese_text(raw_title))
             one_line_ready = bool(localized_one_line) or bool(raw_one_line and not looks_like_chinese_text(raw_one_line))
             method_ready = bool(localized_method) or bool(raw_method and not looks_like_chinese_text(raw_method))
@@ -4316,7 +4798,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             keywords_ready = bool(localized_keywords) or bool(
                 raw_keywords and not any(looks_like_chinese_text(val) for val in raw_keywords)
             )
-        else:
+        elif is_chinese_language(lang):
             title_ready = bool(localized_title) or bool(raw_title and looks_like_chinese_text(raw_title))
             one_line_ready = bool(localized_one_line) or bool(raw_one_line and looks_like_chinese_text(raw_one_line))
             method_ready = bool(localized_method) or bool(raw_method and looks_like_chinese_text(raw_method))
@@ -4329,13 +4811,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
             keywords_ready = bool(localized_keywords) or bool(
                 raw_keywords and any(looks_like_chinese_text(val) for val in raw_keywords)
             )
+        else:
+            title_ready = bool(localized_title)
+            one_line_ready = bool(localized_one_line)
+            method_ready = bool(localized_method)
+            conclusion_ready = bool(localized_conclusion)
+            innovation_ready = bool(localized_innovation)
+            keywords_ready = bool(localized_keywords)
 
         has_text_fields = bool(title_ready and one_line_ready and method_ready and conclusion_ready and innovation_ready)
         has_keywords = bool(keywords_ready)
         if not include_deep:
             return not (has_text_fields and has_keywords)
-        deep_key = "deep_analysis_en" if target_language == "English" else "deep_analysis_zh"
-        deep_ready = isinstance(insight.get(deep_key), dict) and bool(insight.get(deep_key))
+        deep_ready = False
+        if is_english_language(lang):
+            deep_ready = isinstance(insight.get("deep_analysis_en"), dict) and bool(insight.get("deep_analysis_en"))
+        elif is_chinese_language(lang):
+            deep_ready = isinstance(insight.get("deep_analysis_zh"), dict) and bool(insight.get("deep_analysis_zh"))
+        else:
+            deep_ready = bool(self._paper_deep_i18n_entry(insight, lang))
         return not (has_text_fields and has_keywords and deep_ready)
 
     def _pick_paper_deep_source(
@@ -4343,24 +4837,46 @@ class DashboardHandler(BaseHTTPRequestHandler):
         insight: Dict[str, Any],
         target_language: str,
     ) -> Tuple[Dict[str, Any], bool]:
-        target_key = "deep_analysis_en" if target_language == "English" else "deep_analysis_zh"
-        existing_target = insight.get(target_key) if isinstance(insight.get(target_key), dict) else {}
-        if existing_target:
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        lang_key = language_cache_key(lang)
+        existing_i18n = self._paper_deep_i18n_entry(insight, lang)
+        if existing_i18n:
             return {}, False
+
+        if is_english_language(lang):
+            existing_target = insight.get("deep_analysis_en") if isinstance(insight.get("deep_analysis_en"), dict) else {}
+            if existing_target:
+                return {}, False
+        elif is_chinese_language(lang):
+            existing_target = insight.get("deep_analysis_zh") if isinstance(insight.get("deep_analysis_zh"), dict) else {}
+            if existing_target:
+                return {}, False
 
         deep_default = insight.get("deep_analysis") if isinstance(insight.get("deep_analysis"), dict) else {}
         if deep_default:
             deep_lang = normalize_analysis_language(deep_default.get("language", ""), default="")
-            if deep_lang == target_language:
+            if language_cache_key(deep_lang) == lang_key:
                 copied = dict(deep_default)
-                copied["language"] = target_language
+                copied["language"] = lang
                 return copied, False
             return deep_default, True
 
-        opposite_key = "deep_analysis_zh" if target_language == "English" else "deep_analysis_en"
-        opposite_deep = insight.get(opposite_key) if isinstance(insight.get(opposite_key), dict) else {}
-        if opposite_deep:
-            return opposite_deep, True
+        if is_english_language(lang):
+            opposite_deep = insight.get("deep_analysis_zh") if isinstance(insight.get("deep_analysis_zh"), dict) else {}
+            if opposite_deep:
+                return opposite_deep, True
+        elif is_chinese_language(lang):
+            opposite_deep = insight.get("deep_analysis_en") if isinstance(insight.get("deep_analysis_en"), dict) else {}
+            if opposite_deep:
+                return opposite_deep, True
+        else:
+            raw = insight.get("deep_analysis_i18n") if isinstance(insight.get("deep_analysis_i18n"), dict) else {}
+            for key, value in raw.items():
+                if not isinstance(value, dict):
+                    continue
+                if language_cache_key(key) == lang_key:
+                    continue
+                return value, True
         return {}, False
 
     def _enrich_paper_shallow_with_llm(
@@ -4369,7 +4885,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         target_language: str,
         client_config: Dict[str, Any],
     ) -> Dict[str, Any]:
-        suffix = "en" if target_language == "English" else "zh"
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        suffix = "en" if is_english_language(lang) else ("zh" if is_chinese_language(lang) else "")
+        lang_key = language_cache_key(lang)
         insight = record.get("insight") if isinstance(record.get("insight"), dict) else {}
         meta = record.get("meta") if isinstance(record.get("meta"), dict) else {}
         raw_title = str(record.get("title", "") or "").strip()
@@ -4386,20 +4904,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         keywords = self._normalize_keyword_values(insight.get("keywords"))
         keywords_text = ", ".join(keywords[:12])
 
-        target_label = "English" if target_language == "English" else "简体中文"
-        tone_hint = (
-            "All generated fields must be concise English with natural technical writing."
-            if target_language == "English"
-            else "所有生成字段必须是自然、精炼的简体中文技术表达。"
-        )
+        target_label = lang
+        tone_hint = f"All generated fields must be concise and natural in {target_label}."
         prompt = (
-            f"请根据论文信息生成 {target_label} 的卡片分析字段。\n"
-            "要求：\n"
-            "1) 仅返回 JSON，不要 Markdown、解释或代码块。\n"
-            "2) 字段固定为 title, one_sentence_summary, keywords, method, conclusion, innovation。\n"
-            "3) keywords 必须是数组，建议 4-8 项。\n"
-            "4) 保留模型名、产品名、版本号、论文术语，不要胡编。\n"
-            "5) one_sentence_summary 需可直接展示在卡片中，语言紧凑。\n"
+            f"Generate localized card fields in {target_label} from the paper context.\n"
+            "Rules:\n"
+            "1) Return JSON only. No markdown.\n"
+            "2) Fields must be: title, one_sentence_summary, keywords, method, conclusion, innovation.\n"
+            "3) keywords must be an array with 4-8 items.\n"
+            "4) Keep model names / products / versions / paper terms unchanged.\n"
+            "5) Keep one_sentence_summary compact and card-friendly.\n"
             f"6) {tone_hint}\n\n"
             f"title: {raw_title}\n"
             f"abstract: {abstract}\n"
@@ -4408,13 +4922,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             f"existing_method: {method}\n"
             f"existing_conclusion: {conclusion}\n"
             f"existing_innovation: {innovation}\n\n"
-            '输出 JSON: {"title":"...","one_sentence_summary":"...","keywords":["..."],"method":"...","conclusion":"...","innovation":"..."}'
+            'Output JSON: {"title":"...","one_sentence_summary":"...","keywords":["..."],"method":"...","conclusion":"...","innovation":"..."}'
         )
-        system_prompt = (
-            "You are an expert AI research editor. Return strict JSON only."
-            if target_language == "English"
-            else "你是 AI 论文编辑专家，只输出严格 JSON。"
-        )
+        system_prompt = "You are an expert AI research editor. Return strict JSON only."
         client = AIClient(client_config)
         response = client.chat(
             [
@@ -4431,9 +4941,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         title_val = str(parsed.get("title", "") or "").strip()
         if not title_val:
-            if target_language == "English" and raw_title and not looks_like_chinese_text(raw_title):
+            if is_english_language(lang) and raw_title and not looks_like_chinese_text(raw_title):
                 title_val = raw_title
-            elif target_language == "Chinese" and raw_title and looks_like_chinese_text(raw_title):
+            elif is_chinese_language(lang) and raw_title and looks_like_chinese_text(raw_title):
+                title_val = raw_title
+            elif raw_title:
                 title_val = raw_title
         one_line_val = str(parsed.get("one_sentence_summary", "") or "").strip()
         method_val = str(parsed.get("method", "") or "").strip()
@@ -4449,19 +4961,163 @@ class DashboardHandler(BaseHTTPRequestHandler):
             raise ValueError("empty shallow enrichment fields")
 
         updates: Dict[str, Any] = {}
+        if suffix:
+            if title_val:
+                updates[f"title_{suffix}"] = title_val
+            if one_line_val:
+                updates[f"one_sentence_summary_{suffix}"] = one_line_val
+            if method_val:
+                updates[f"method_{suffix}"] = method_val
+            if conclusion_val:
+                updates[f"conclusion_{suffix}"] = conclusion_val
+            if innovation_val:
+                updates[f"innovation_{suffix}"] = innovation_val
+            if keywords_val:
+                updates[f"keywords_{suffix}"] = keywords_val
+            return updates
+
+        i18n_payload: Dict[str, Any] = {}
         if title_val:
-            updates[f"title_{suffix}"] = title_val
+            i18n_payload["title"] = title_val
         if one_line_val:
-            updates[f"one_sentence_summary_{suffix}"] = one_line_val
+            i18n_payload["one_sentence_summary"] = one_line_val
         if method_val:
-            updates[f"method_{suffix}"] = method_val
+            i18n_payload["method"] = method_val
         if conclusion_val:
-            updates[f"conclusion_{suffix}"] = conclusion_val
+            i18n_payload["conclusion"] = conclusion_val
         if innovation_val:
-            updates[f"innovation_{suffix}"] = innovation_val
+            i18n_payload["innovation"] = innovation_val
         if keywords_val:
-            updates[f"keywords_{suffix}"] = keywords_val
+            i18n_payload["keywords"] = keywords_val
+        if i18n_payload:
+            updates["i18n"] = {lang_key: i18n_payload}
         return updates
+
+    def _batch_translate_paper_shallow_with_llm(
+        self,
+        pending: List[Tuple[str, Dict[str, Any]]],
+        target_language: str,
+        client_config: Dict[str, Any],
+    ) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, str]]]:
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        lang_key = language_cache_key(lang)
+        if not pending:
+            return {}, []
+
+        max_batch = 6
+        translated: Dict[str, Dict[str, Any]] = {}
+        failed: List[Dict[str, str]] = []
+        client = AIClient(client_config)
+
+        for offset in range(0, len(pending), max_batch):
+            chunk = pending[offset : offset + max_batch]
+            payload_items: List[Dict[str, Any]] = []
+            for key, record in chunk:
+                insight = record.get("insight") if isinstance(record.get("insight"), dict) else {}
+                payload_items.append(
+                    {
+                        "paper_key": key,
+                        "title": str(record.get("title", "") or "").strip(),
+                        "one_sentence_summary": str(
+                            insight.get("one_sentence_summary") or insight.get("summary") or ""
+                        ).strip(),
+                        "method": str(insight.get("method", "") or "").strip(),
+                        "conclusion": str(insight.get("conclusion") or insight.get("findings") or "").strip(),
+                        "innovation": str(insight.get("innovation") or insight.get("novelty") or "").strip(),
+                        "keywords": self._normalize_keyword_values(insight.get("keywords")),
+                    }
+                )
+
+            prompt = (
+                f"Translate each paper card field into {lang}.\n"
+                "Return strict JSON only with shape:\n"
+                '{"items":[{"paper_key":"...","title":"...","one_sentence_summary":"...","method":"...","conclusion":"...","innovation":"...","keywords":["..."]}]}\n\n'
+                "Rules:\n"
+                "1) Keep paper_key unchanged.\n"
+                "2) Keep model names / product names / versions / formulas unchanged.\n"
+                "3) keywords must be an array.\n"
+                "4) If a source field is empty, return empty string (or [] for keywords).\n\n"
+                f"Input JSON:\n{json.dumps(payload_items, ensure_ascii=False)}"
+            )
+            try:
+                response = client.chat(
+                    [
+                        {"role": "system", "content": "You are a strict multilingual paper field translator. JSON only."},
+                        {"role": "user", "content": prompt},
+                    ]
+                )
+                payload_text = self._extract_json_object_text(str(response or ""))
+                if not payload_text:
+                    raise ValueError("empty batch payload")
+                parsed = json.loads(payload_text)
+                if not isinstance(parsed, dict):
+                    raise ValueError("batch payload is not object")
+                items = parsed.get("items") if isinstance(parsed.get("items"), list) else []
+                mapped: Dict[str, Dict[str, Any]] = {}
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    paper_key = str(item.get("paper_key", "") or "").strip()
+                    if not paper_key:
+                        continue
+                    mapped[paper_key] = {
+                        "title": str(item.get("title", "") or "").strip(),
+                        "one_sentence_summary": str(item.get("one_sentence_summary", "") or "").strip(),
+                        "method": str(item.get("method", "") or "").strip(),
+                        "conclusion": str(item.get("conclusion", "") or "").strip(),
+                        "innovation": str(item.get("innovation", "") or "").strip(),
+                        "keywords": self._normalize_keyword_values(item.get("keywords")),
+                    }
+
+                for key, _record in chunk:
+                    localized = mapped.get(key, {})
+                    title_val = str(localized.get("title", "") or "").strip()
+                    one_line_val = str(localized.get("one_sentence_summary", "") or "").strip()
+                    method_val = str(localized.get("method", "") or "").strip()
+                    conclusion_val = str(localized.get("conclusion", "") or "").strip()
+                    innovation_val = str(localized.get("innovation", "") or "").strip()
+                    keywords_val = self._normalize_keyword_values(localized.get("keywords"))
+                    if not any([title_val, one_line_val, method_val, conclusion_val, innovation_val, keywords_val]):
+                        failed.append({"key": key, "error": "empty batch translation fields"})
+                        continue
+
+                    if is_english_language(lang):
+                        patch: Dict[str, Any] = {
+                            "title_en": title_val,
+                            "one_sentence_summary_en": one_line_val,
+                            "method_en": method_val,
+                            "conclusion_en": conclusion_val,
+                            "innovation_en": innovation_val,
+                            "keywords_en": keywords_val,
+                        }
+                    elif is_chinese_language(lang):
+                        patch = {
+                            "title_zh": title_val,
+                            "one_sentence_summary_zh": one_line_val,
+                            "method_zh": method_val,
+                            "conclusion_zh": conclusion_val,
+                            "innovation_zh": innovation_val,
+                            "keywords_zh": keywords_val,
+                        }
+                    else:
+                        patch = {
+                            "i18n": {
+                                lang_key: {
+                                    "title": title_val,
+                                    "one_sentence_summary": one_line_val,
+                                    "method": method_val,
+                                    "conclusion": conclusion_val,
+                                    "innovation": innovation_val,
+                                    "keywords": keywords_val,
+                                }
+                            }
+                        }
+                    translated[key] = patch
+            except Exception as exc:
+                for key, _record in chunk:
+                    failed.append({"key": key, "error": f"batch translate failed: {type(exc).__name__}: {exc}"})
+
+        return translated, failed
 
     def _translate_deep_analysis_with_llm(
         self,
@@ -4471,7 +5127,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     ) -> Dict[str, Any]:
         if not source_deep:
             return {}
-        target_label = "English" if target_language == "English" else "简体中文"
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        target_label = lang
         source_text = json.dumps(source_deep, ensure_ascii=False)
         prompt = (
             f"Translate the JSON object values into {target_label}.\n"
@@ -4495,7 +5152,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         parsed = json.loads(payload)
         if not isinstance(parsed, dict):
             raise ValueError("deep translation payload is not object")
-        parsed["language"] = target_language
+        parsed["language"] = lang
         if not str(parsed.get("analyzed_at", "") or "").strip():
             parsed["analyzed_at"] = str(source_deep.get("analyzed_at", "") or utc_now_iso())
         return parsed
@@ -4521,8 +5178,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
             updates.update(self._enrich_paper_shallow_with_llm(record, target_language, client_config))
 
         if include_deep:
-            target_key = "deep_analysis_en" if target_language == "English" else "deep_analysis_zh"
-            existing_target_deep = insight.get(target_key) if isinstance(insight.get(target_key), dict) else {}
+            lang = normalize_analysis_language(target_language, default="Chinese")
+            lang_key = language_cache_key(lang)
+            if is_english_language(lang):
+                target_key = "deep_analysis_en"
+                existing_target_deep = (
+                    insight.get(target_key) if isinstance(insight.get(target_key), dict) else {}
+                )
+            elif is_chinese_language(lang):
+                target_key = "deep_analysis_zh"
+                existing_target_deep = (
+                    insight.get(target_key) if isinstance(insight.get(target_key), dict) else {}
+                )
+            else:
+                target_key = ""
+                existing_target_deep = self._paper_deep_i18n_entry(insight, lang)
             if force or not existing_target_deep:
                 source_deep, needs_translate = self._pick_paper_deep_source(insight, target_language)
                 if source_deep:
@@ -4532,8 +5202,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         else dict(source_deep)
                     )
                     if translated_deep:
-                        translated_deep["language"] = target_language
-                        updates[target_key] = translated_deep
+                        translated_deep["language"] = lang
+                        if target_key:
+                            updates[target_key] = translated_deep
+                        else:
+                            updates["deep_analysis_i18n"] = {lang_key: translated_deep}
         return updates
 
     def _translate_paper_items(
@@ -4611,37 +5284,51 @@ class DashboardHandler(BaseHTTPRequestHandler):
         translated_patches: Dict[str, Dict[str, Any]] = {}
         worker_count = max(1, min(int(max_workers or 2), 2))
         if pending:
-            with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                future_map = {
-                    executor.submit(
-                        self._translate_single_paper_record,
-                        record,
-                        target_language,
-                        client_config,
-                        include_deep,
-                        force,
-                    ): key
-                    for key, record in pending
-                }
-                for future in as_completed(future_map):
-                    key = future_map[future]
-                    try:
-                        patch = future.result()
-                        if patch:
-                            translated_patches[key] = patch
-                        else:
-                            skipped += 1
-                    except json.JSONDecodeError:
-                        error_msg = "invalid paper enrichment json"
-                        failed.append({"key": key, "error": error_msg})
-                        with self.paper_enrich_retry_lock:
-                            self.paper_enrich_retry_after[retry_key_of(key)] = time.time() + 300
-                    except Exception as exc:
-                        error_msg = f"LLM 调用失败: {type(exc).__name__}: {exc}"
-                        failed.append({"key": key, "error": error_msg})
-                        cooldown = 900 if "timeout" in error_msg.lower() else 300
-                        with self.paper_enrich_retry_lock:
-                            self.paper_enrich_retry_after[retry_key_of(key)] = time.time() + cooldown
+            if (not include_deep) and (not is_english_language(target_language)) and (not is_chinese_language(target_language)):
+                batch_patches, batch_failed = self._batch_translate_paper_shallow_with_llm(
+                    pending=pending,
+                    target_language=target_language,
+                    client_config=client_config,
+                )
+                translated_patches.update(batch_patches)
+                failed.extend(batch_failed)
+                failed_key_set = {str(x.get("key", "") or "").strip() for x in batch_failed if isinstance(x, dict)}
+                for key, _record in pending:
+                    if key in translated_patches or key in failed_key_set:
+                        continue
+                    skipped += 1
+            else:
+                with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                    future_map = {
+                        executor.submit(
+                            self._translate_single_paper_record,
+                            record,
+                            target_language,
+                            client_config,
+                            include_deep,
+                            force,
+                        ): key
+                        for key, record in pending
+                    }
+                    for future in as_completed(future_map):
+                        key = future_map[future]
+                        try:
+                            patch = future.result()
+                            if patch:
+                                translated_patches[key] = patch
+                            else:
+                                skipped += 1
+                        except json.JSONDecodeError:
+                            error_msg = "invalid paper enrichment json"
+                            failed.append({"key": key, "error": error_msg})
+                            with self.paper_enrich_retry_lock:
+                                self.paper_enrich_retry_after[retry_key_of(key)] = time.time() + 300
+                        except Exception as exc:
+                            error_msg = f"LLM 调用失败: {type(exc).__name__}: {exc}"
+                            failed.append({"key": key, "error": error_msg})
+                            cooldown = 900 if "timeout" in error_msg.lower() else 300
+                            with self.paper_enrich_retry_lock:
+                                self.paper_enrich_retry_after[retry_key_of(key)] = time.time() + cooldown
 
         changed = 0
         translated_keys: List[str] = []
@@ -4654,7 +5341,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
             rowid = int(record.get("rowid", 0) or 0)
             old_insight = record.get("insight") if isinstance(record.get("insight"), dict) else {}
             new_insight = dict(old_insight)
-            new_insight.update(patch)
+            for patch_key, patch_value in patch.items():
+                if patch_key in {"i18n", "deep_analysis_i18n"} and isinstance(patch_value, dict):
+                    existed = new_insight.get(patch_key) if isinstance(new_insight.get(patch_key), dict) else {}
+                    merged = dict(existed)
+                    for lang_key, localized_value in patch_value.items():
+                        safe_lang = language_cache_key(lang_key)
+                        if not safe_lang:
+                            continue
+                        if isinstance(localized_value, dict):
+                            current_localized = (
+                                merged.get(safe_lang) if isinstance(merged.get(safe_lang), dict) else {}
+                            )
+                            combined_localized = dict(current_localized)
+                            combined_localized.update(localized_value)
+                            merged[safe_lang] = combined_localized
+                    new_insight[patch_key] = merged
+                    continue
+                new_insight[patch_key] = patch_value
             if new_insight == old_insight:
                 skipped += 1
                 with self.paper_enrich_retry_lock:
@@ -4699,73 +5403,146 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "TIMEOUT": 80,
         }
 
-    def _progress_item_needs_enrichment(self, row: Dict[str, Any], force: bool = False) -> bool:
-        if force:
-            return True
-        return not (
-            str(row.get("title_zh", "") or "").strip()
-            and str(row.get("summary_zh", "") or "").strip()
-            and str(row.get("llm_takeaway_zh", "") or "").strip()
-        )
+    def _progress_i18n_entry(self, row: Dict[str, Any], target_language: str) -> Dict[str, Any]:
+        raw = row.get("i18n") if isinstance(row.get("i18n"), dict) else {}
+        lang_key = language_cache_key(target_language)
+        entry = raw.get(lang_key) if isinstance(raw.get(lang_key), dict) else {}
+        return dict(entry) if isinstance(entry, dict) else {}
 
-    def _enrich_progress_item_with_llm(
+    def _progress_item_needs_enrichment(
         self,
         row: Dict[str, Any],
-        client_config: Dict[str, Any],
-    ) -> Dict[str, str]:
-        title = str(row.get("title", "") or "").strip()
-        summary = str(row.get("summary", "") or "").strip()
-        if not title:
-            raise ValueError("empty title")
+        target_language: str,
+        force: bool = False,
+    ) -> bool:
+        if force:
+            return True
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        if is_chinese_language(lang):
+            return not (
+                str(row.get("title_zh", "") or "").strip()
+                and str(row.get("summary_zh", "") or "").strip()
+                and str(row.get("llm_takeaway_zh", "") or "").strip()
+            )
+        mapped = self._progress_i18n_entry(row, lang)
+        if mapped:
+            return not (
+                str(mapped.get("title", "") or "").strip()
+                and str(mapped.get("summary", "") or "").strip()
+                and str(mapped.get("llm_takeaway", "") or "").strip()
+            )
+        if is_english_language(lang):
+            return not (
+                str(row.get("title", "") or "").strip()
+                and str(row.get("summary", "") or "").strip()
+                and str(row.get("llm_takeaway", "") or "").strip()
+            )
+        return True
 
-        source_name = str(row.get("source_name", "") or "").strip()
-        org = str(row.get("org", "") or "").strip()
-        event_type = str(row.get("event_type", "") or "").strip()
-        published_at = str(row.get("published_at", "") or "").strip()
+    def _enrich_progress_items_batch_with_llm(
+        self,
+        pending_rows: List[Tuple[str, Dict[str, Any]]],
+        target_language: str,
+        client_config: Dict[str, Any],
+    ) -> Tuple[Dict[str, Dict[str, str]], List[Dict[str, str]]]:
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        lang_key = language_cache_key(lang)
+        if not pending_rows:
+            return {}, []
+
+        max_batch = 8
+        translated: Dict[str, Dict[str, str]] = {}
+        failed: List[Dict[str, str]] = []
         client = AIClient(client_config)
-        prompt = (
-            "请把下面这条 AI 技术进展整理成适合资讯卡片展示的简体中文内容。\n"
-            "要求：\n"
-            "1) 只返回 JSON，不要附带解释、Markdown 或代码块。\n"
-            "2) 字段固定为 title_zh、summary_zh、llm_takeaway_zh。\n"
-            "3) title_zh 要准确自然，保留关键产品名、模型名、版本号。\n"
-            "4) summary_zh 控制在 140 字以内，写成紧凑中文摘要。\n"
-            "5) llm_takeaway_zh 是一句中文结论，控制在 36 字以内，突出这条更新最值得关注的点。\n\n"
-            f"source_name: {source_name}\n"
-            f"org: {org}\n"
-            f"event_type: {event_type}\n"
-            f"published_at: {published_at}\n"
-            f"title: {title}\n"
-            f"summary: {summary}\n\n"
-            "输出 JSON:\n"
-            '{"title_zh":"...","summary_zh":"...","llm_takeaway_zh":"..."}'
-        )
-        response = client.chat(
-            [
-                {"role": "system", "content": "你是专业的 AI 技术编辑，擅长把官方更新压缩成适合卡片展示的中文简报。"},
-                {"role": "user", "content": prompt},
-            ]
-        )
-        payload = self._extract_json_object_text(response)
-        if not payload:
-            raise ValueError("empty enrichment payload")
-        parsed = json.loads(payload)
-        if not isinstance(parsed, dict):
-            raise ValueError("enrichment payload is not object")
-        title_zh = str(parsed.get("title_zh", "") or "").strip()
-        summary_zh = str(parsed.get("summary_zh", "") or "").strip()
-        llm_takeaway_zh = str(parsed.get("llm_takeaway_zh", "") or "").strip()
-        if not title_zh and not summary_zh and not llm_takeaway_zh:
-            raise ValueError("empty enrichment fields")
-        return {
-            "title_zh": title_zh,
-            "summary_zh": summary_zh,
-            "llm_takeaway_zh": llm_takeaway_zh,
-        }
+
+        for offset in range(0, len(pending_rows), max_batch):
+            chunk = pending_rows[offset : offset + max_batch]
+            payload_items: List[Dict[str, Any]] = []
+            for key, row in chunk:
+                payload_items.append(
+                    {
+                        "id": key,
+                        "source_name": str(row.get("source_name", "") or "").strip(),
+                        "org": str(row.get("org", "") or "").strip(),
+                        "event_type": str(row.get("event_type", "") or "").strip(),
+                        "published_at": str(row.get("published_at", "") or "").strip(),
+                        "title": str(row.get("title", "") or "").strip(),
+                        "summary": str(row.get("summary", "") or "").strip(),
+                        "llm_takeaway": str(row.get("llm_takeaway", "") or "").strip(),
+                    }
+                )
+
+            prompt = (
+                f"Translate and normalize each item into {lang}.\n"
+                "Return strict JSON only with this shape:\n"
+                '{"items":[{"id":"...","title":"...","summary":"...","llm_takeaway":"..."}]}\n\n'
+                "Rules:\n"
+                "1) Keep IDs exactly the same.\n"
+                "2) Preserve model names / product names / versions / URLs.\n"
+                "3) summary should be concise and readable.\n"
+                "4) llm_takeaway should be one short sentence highlighting the key point.\n"
+                "5) If a field is empty in input, return empty string for that field.\n\n"
+                f"Input items JSON:\n{json.dumps(payload_items, ensure_ascii=False)}"
+            )
+            try:
+                response = client.chat(
+                    [
+                        {"role": "system", "content": "You are a strict multilingual technical editor. Return JSON only."},
+                        {"role": "user", "content": prompt},
+                    ]
+                )
+                text = str(response or "").strip()
+                payload_text = self._extract_json_object_text(text)
+                if not payload_text:
+                    raise ValueError("empty enrichment payload")
+                parsed = json.loads(payload_text)
+                if not isinstance(parsed, dict):
+                    raise ValueError("enrichment payload is not object")
+                parsed_items = parsed.get("items") if isinstance(parsed.get("items"), list) else []
+                mapped: Dict[str, Dict[str, str]] = {}
+                for item in parsed_items:
+                    if not isinstance(item, dict):
+                        continue
+                    key = str(item.get("id", "") or "").strip()
+                    if not key:
+                        continue
+                    mapped[key] = {
+                        "title": str(item.get("title", "") or "").strip(),
+                        "summary": str(item.get("summary", "") or "").strip(),
+                        "llm_takeaway": str(item.get("llm_takeaway", "") or "").strip(),
+                    }
+
+                for key, row in chunk:
+                    obj = mapped.get(key, {})
+                    title_val = str(obj.get("title", "") or "").strip()
+                    summary_val = str(obj.get("summary", "") or "").strip()
+                    takeaway_val = str(obj.get("llm_takeaway", "") or "").strip()
+                    if not (title_val or summary_val or takeaway_val):
+                        failed.append({"key": key, "error": "empty enrichment fields"})
+                        continue
+                    patch: Dict[str, str] = {
+                        "language": lang,
+                        "output_language": lang,
+                        "title": title_val,
+                        "summary": summary_val,
+                        "llm_takeaway": takeaway_val,
+                    }
+                    if is_chinese_language(lang):
+                        patch["title_zh"] = title_val
+                        patch["summary_zh"] = summary_val
+                        patch["llm_takeaway_zh"] = takeaway_val
+                    patch["lang"] = lang_key
+                    translated[key] = patch
+            except Exception as exc:
+                for key, _row in chunk:
+                    failed.append({"key": key, "error": f"LLM 调用失败: {type(exc).__name__}: {exc}"})
+
+        return translated, failed
 
     def _translate_progress_items(
         self,
         keys: List[str],
+        output_language: str = "Chinese",
         force: bool = False,
         max_workers: int = 2,
         allow_skip_unconfigured: bool = False,
@@ -4774,6 +5551,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not cleaned_keys:
             return {"ok": False, "error": "keys is required"}
         cleaned_keys = cleaned_keys[:200]
+        target_language = normalize_analysis_language(output_language, default="Chinese")
 
         settings = self.settings.load()
         client_config = self._build_progress_llm_client_config(settings)
@@ -4788,8 +5566,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "failed": [],
                     "skipped": True,
                     "reason": "LLM 未配置，跳过前沿进展富化",
+                    "output_language": target_language,
                 }
-            return {"ok": False, "error": "LLM 未配置，无法执行中文翻译"}
+            return {"ok": False, "error": "LLM 未配置，无法执行多语言翻译"}
 
         loaded = self.progress.load()
         rows = loaded.get("items") if isinstance(loaded, dict) else []
@@ -4813,7 +5592,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not isinstance(row, dict):
                 failed.append({"key": key, "error": "item not found"})
                 continue
-            if not self._progress_item_needs_enrichment(row, force=force):
+            if not self._progress_item_needs_enrichment(row, target_language=target_language, force=force):
                 skipped += 1
                 continue
             if not str(row.get("title", "") or "").strip():
@@ -4821,21 +5600,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 continue
             pending_rows.append((key, row))
 
-        worker_count = max(1, min(int(max_workers or 2), 2))
+        worker_count = max(1, min(int(max_workers or 2), 4))
         if pending_rows:
-            with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                future_map = {
-                    executor.submit(self._enrich_progress_item_with_llm, row, client_config): key
-                    for key, row in pending_rows
-                }
-                for future in as_completed(future_map):
-                    key = future_map[future]
-                    try:
-                        translations[key] = future.result()
-                    except json.JSONDecodeError:
-                        failed.append({"key": key, "error": "invalid enrichment json"})
-                    except Exception as exc:
-                        failed.append({"key": key, "error": f"LLM 调用失败: {type(exc).__name__}: {exc}"})
+            translations, batch_failed = self._enrich_progress_items_batch_with_llm(
+                pending_rows=pending_rows,
+                target_language=target_language,
+                client_config=client_config,
+            )
+            failed.extend(batch_failed)
 
         apply_result = (
             self.progress.apply_translations(translations)
@@ -4852,9 +5624,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "failed": failed,
             "skipped": skipped,
             "worker_count": worker_count,
+            "output_language": target_language,
         }
 
-    def _build_subscription_payload_text(self, sub: Dict[str, Any], papers: List[Dict[str, Any]]) -> str:
+    def _build_subscription_payload_text(
+        self,
+        sub: Dict[str, Any],
+        papers: List[Dict[str, Any]],
+        strategy: str = SUBSCRIPTION_STRATEGY_DEFAULT,
+    ) -> str:
         name = str(sub.get("name", "") or "").strip()
 
         def clip_text(text: Any, limit: int) -> str:
@@ -4865,10 +5643,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         lines: List[str] = []
         total = len(papers)
+        strategy_key = normalize_subscription_strategy(strategy, default=SUBSCRIPTION_STRATEGY_DEFAULT)
+        strategy_title = subscription_strategy_label(strategy_key)
         if name and name != "订阅":
-            lines.append(f"{name} · 新命中论文 {total} 篇")
+            lines.append(f"{name} · {strategy_title} · 命中论文 {total} 篇")
         else:
-            lines.append(f"新命中论文 {total} 篇")
+            lines.append(f"{strategy_title} · 命中论文 {total} 篇")
         lines.append("")
 
         max_items = 5
@@ -4929,6 +5709,47 @@ class DashboardHandler(BaseHTTPRequestHandler):
         lines.append(f"推送时间: {utc_now_iso()}")
         return "\n".join(lines).strip() + "\n"
 
+    def _translate_notification_text_with_llm(
+        self,
+        message: str,
+        target_language: str,
+        settings: Dict[str, Any],
+    ) -> str:
+        source = str(message or "").strip()
+        if not source:
+            return ""
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        if is_chinese_language(lang):
+            return source
+        client_config = self._build_paper_llm_client_config(settings)
+        if not client_config:
+            client_config = self._build_progress_llm_client_config(settings)
+        if not client_config:
+            return source
+        prompt = (
+            f"Translate the following notification text into {lang}.\n"
+            "Rules:\n"
+            "1) Keep URLs unchanged.\n"
+            "2) Keep model names / company names / version numbers unchanged.\n"
+            "3) Keep list numbers and overall structure.\n"
+            "4) Return translated text only.\n\n"
+            f"{source}"
+        )
+        try:
+            client = AIClient(client_config)
+            translated = str(
+                client.chat(
+                    [
+                        {"role": "system", "content": "You are a concise multilingual technical translator."},
+                        {"role": "user", "content": prompt},
+                    ]
+                )
+                or ""
+            ).strip()
+            return translated or source
+        except Exception:
+            return source
+
     def _send_subscription_notification(
         self,
         channel: str,
@@ -4976,7 +5797,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _run_subscription(self, sub: Dict[str, Any]) -> Dict[str, Any]:
         sub_id = str(sub.get("id", "") or "").strip()
+        settings = self.settings.load()
+        output_language = normalize_analysis_language(
+            settings.get("analysis_language", "Chinese"),
+            default="Chinese",
+        )
         filters = normalize_panel_filters(sub.get("filters") if isinstance(sub, dict) else {})
+        strategy = normalize_subscription_strategy(
+            sub.get("strategy"),
+            default=SUBSCRIPTION_STRATEGY_DEFAULT,
+        )
         mode = str(sub.get("mode", "all") or "all")
         sort_by = str(sub.get("sort_by", "score") or "score")
         sort_order = str(sub.get("sort_order", "desc") or "desc")
@@ -4990,6 +5820,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             sort_order=sort_order,
             history=history,
             filters=filters,
+            output_language=output_language,
         )
         papers = data.get("papers") if isinstance(data, dict) else []
         if not isinstance(papers, list):
@@ -5009,31 +5840,126 @@ class DashboardHandler(BaseHTTPRequestHandler):
             fresh_papers.append(paper)
             fresh_keys.append(key)
 
+        selected_papers: List[Dict[str, Any]] = []
+        selected_keys: List[str] = []
+        if strategy == "daily":
+            for paper in papers:
+                if not isinstance(paper, dict):
+                    continue
+                selected_papers.append(paper)
+                key = str(paper.get("paper_key", "") or "").strip()
+                if key:
+                    selected_keys.append(key)
+        elif strategy == "realtime":
+            for paper in fresh_papers:
+                if not isinstance(paper, dict):
+                    continue
+                if not is_realtime_priority_paper(paper):
+                    continue
+                selected_papers.append(paper)
+                key = str(paper.get("paper_key", "") or "").strip()
+                if key:
+                    selected_keys.append(key)
+        else:
+            selected_papers = list(fresh_papers)
+            selected_keys = list(fresh_keys)
+
         result: Dict[str, Any] = {
             "id": sub_id,
             "name": str(sub.get("name", "") or "").strip(),
             "channel": str(sub.get("channel", "") or "").strip(),
+            "strategy": strategy,
+            "output_language": output_language,
             "match_count": len(papers),
             "new_count": len(fresh_papers),
+            "push_count": len(selected_papers),
             "ok": True,
             "message": "",
         }
-        if not fresh_papers:
-            result["message"] = "无新增命中，无需推送"
+        if not selected_papers:
+            if strategy == "daily":
+                result["message"] = "当日汇总无命中，跳过推送"
+            elif strategy == "realtime":
+                result["message"] = "无高优先级实时告警，跳过推送"
+            else:
+                result["message"] = "无新增命中，无需推送"
             return result
 
-        settings = self.settings.load()
-        msg_text = self._build_subscription_payload_text(sub, fresh_papers)
+        msg_text = self._build_subscription_payload_text(sub, selected_papers, strategy=strategy)
+        msg_text = self._translate_notification_text_with_llm(
+            msg_text,
+            target_language=output_language,
+            settings=settings,
+        )
         ok, msg = self._send_subscription_notification(
             str(sub.get("channel", "") or "").strip(),
             settings,
             msg_text,
+            subject=f"[OmniHawk AI] 论文订阅 {subscription_strategy_label(strategy)} 通知",
         )
         result["ok"] = ok
         result["message"] = msg
         if ok:
-            self.subscriptions.mark_notified(sub_id, fresh_keys, len(papers))
+            mark_keys = selected_keys if strategy in {"incremental", "realtime"} else []
+            self.subscriptions.mark_notified(sub_id, mark_keys, len(papers))
         return result
+
+    def _run_paper_subscriptions(
+        self,
+        sub_id: str = "",
+        *,
+        trigger_mode: str = "manual",
+    ) -> Dict[str, Any]:
+        payload = self.subscriptions.load()
+        items = payload.get("items") if isinstance(payload, dict) else []
+        if not isinstance(items, list):
+            items = []
+        target_id = str(sub_id or "").strip()
+        if target_id:
+            targets = [item for item in items if str(item.get("id", "")) == target_id]
+        else:
+            targets = [item for item in items if bool(item.get("enabled", True))]
+
+        mode = str(trigger_mode or "manual").strip().lower() or "manual"
+        if mode == "realtime":
+            targets = [
+                item
+                for item in targets
+                if normalize_subscription_strategy(
+                    item.get("strategy"),
+                    default=SUBSCRIPTION_STRATEGY_DEFAULT,
+                )
+                == "realtime"
+            ]
+        elif mode == "scheduled":
+            targets = [
+                item
+                for item in targets
+                if normalize_subscription_strategy(
+                    item.get("strategy"),
+                    default=SUBSCRIPTION_STRATEGY_DEFAULT,
+                )
+                != "realtime"
+            ]
+        if not targets:
+            empty_ok = mode in {"scheduled", "realtime"}
+            return {
+                "ok": empty_ok,
+                "error": "no subscription to run",
+                "trigger_mode": mode,
+                "results": [],
+                "success_count": 0,
+                "total": 0,
+            }
+        results = [self._run_subscription(item) for item in targets]
+        success_count = sum(1 for x in results if x.get("ok"))
+        return {
+            "ok": success_count == len(results),
+            "trigger_mode": mode,
+            "results": results,
+            "success_count": success_count,
+            "total": len(results),
+        }
 
     def _send_test_webhook(
         self,
@@ -5763,6 +6689,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 updates["notify_channel"] = str(data.get("notify_channel", "") or "").strip().lower()
             if "notify_limit" in data:
                 updates["notify_limit"] = parse_int_value(data.get("notify_limit"), 1, 30)
+            if "output_language" in data:
+                updates["output_language"] = normalize_analysis_language(
+                    data.get("output_language"),
+                    default="Chinese",
+                )
             if "feishu_webhook_url" in data:
                 updates["feishu_webhook_url"] = str(data.get("feishu_webhook_url", "") or "").strip()
             if "wework_webhook_url" in data:
@@ -5891,7 +6822,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": "no matched progress item to push"}, status=400)
                 return
 
-            # Try to enrich Chinese fields before push; if LLM is not configured, skip silently.
+            # Try to enrich localized fields before push; if LLM is not configured, skip silently.
             keys = []
             for row in items:
                 if not isinstance(row, dict):
@@ -5899,10 +6830,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 key = str(row.get("progress_key", "") or "").strip()
                 if key and key not in keys:
                     keys.append(key)
+            scope_settings = self.progress_page_settings.get_scope(scope)
+            output_language = normalize_analysis_language(
+                scope_settings.get("output_language", "Chinese"),
+                default="Chinese",
+            )
             enrichment = None
             if keys:
                 enrichment = self._translate_progress_items(
                     keys=keys,
+                    output_language=output_language,
                     force=False,
                     max_workers=2,
                     allow_skip_unconfigured=True,
@@ -5915,8 +6852,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": "no matched progress item to push"}, status=400)
                 return
 
-            msg_text = self._build_progress_payload_text(items)
             settings = self._progress_notify_settings(scope)
+            msg_text = self._build_progress_payload_text(
+                items,
+                strategy="daily",
+                output_language=output_language,
+            )
+            msg_text = self._translate_notification_text_with_llm(
+                msg_text,
+                target_language=output_language,
+                settings=settings,
+            )
             ok, msg = self._send_subscription_notification(channel, settings, msg_text)
             if ok:
                 payload = {"ok": True, "channel": channel, "count": len(items), "message": msg}
@@ -5933,6 +6879,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             name = str(data.get("name", "") or "").strip()
             raw_channel = str(data.get("channel", "") or "").strip().lower()
             channel = normalize_notify_channel(raw_channel)
+            strategy = normalize_subscription_strategy(
+                data.get("strategy"),
+                default=SUBSCRIPTION_STRATEGY_DEFAULT,
+            )
             enabled = bool(parse_bool_text(data.get("enabled"), True))
             limit = parse_int_value(data.get("limit"), 1, 500) or 120
             sub_id = str(data.get("id", "") or "").strip()
@@ -5948,6 +6898,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 filters=filters,
                 enabled=enabled,
                 limit=limit,
+                strategy=strategy,
                 sub_id=sub_id,
             )
             items = self.progress_subscriptions.list(scope)
@@ -5986,8 +6937,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             keys: List[str] = []
             if isinstance(keys_raw, list):
                 keys = [str(x).strip() for x in keys_raw if str(x).strip()]
+            output_language = normalize_analysis_language(
+                str(data.get("output_language", "") or "").strip(),
+                default="Chinese",
+            )
             force = bool(parse_bool_text(data.get("force"), False))
-            result = self._translate_progress_items(keys=keys, force=force)
+            result = self._translate_progress_items(
+                keys=keys,
+                output_language=output_language,
+                force=force,
+            )
             if result.get("ok"):
                 self._send_json(result)
             else:
@@ -5999,6 +6958,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             name = str(data.get("name", "") or "").strip()
             raw_channel = str(data.get("channel", "") or "").strip().lower()
             channel = normalize_notify_channel(raw_channel)
+            strategy = normalize_subscription_strategy(
+                data.get("strategy"),
+                default=SUBSCRIPTION_STRATEGY_DEFAULT,
+            )
             enabled = parse_bool_text(data.get("enabled"), True)
             sub_id = str(data.get("id", "") or "").strip()
             filters = normalize_panel_filters(data.get("filters") if isinstance(data.get("filters"), dict) else {})
@@ -6027,6 +6990,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 enabled=bool(enabled),
                 sub_id=sub_id,
                 mode=mode,
+                strategy=strategy,
                 sort_by=sort_by,
                 sort_order=sort_order,
                 history=history,
@@ -6055,28 +7019,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/subscriptions/run":
             data = self._read_json()
             sub_id = str(data.get("id", "") or "").strip()
-            payload = self.subscriptions.load()
-            items = payload.get("items") or []
-            if not isinstance(items, list):
-                items = []
-            targets = []
-            if sub_id:
-                targets = [item for item in items if str(item.get("id", "")) == sub_id]
+            result = self._run_paper_subscriptions(sub_id=sub_id, trigger_mode="manual")
+            if result.get("ok"):
+                self._send_json(result)
             else:
-                targets = [item for item in items if bool(item.get("enabled", True))]
-            if not targets:
-                self._send_json({"ok": False, "error": "no subscription to run"}, status=400)
-                return
-            results = [self._run_subscription(item) for item in targets]
-            success_count = sum(1 for x in results if x.get("ok"))
-            self._send_json(
-                {
-                    "ok": success_count == len(results),
-                    "results": results,
-                    "success_count": success_count,
-                    "total": len(results),
-                }
-            )
+                self._send_json(result, status=400)
             return
 
         if path == "/api/notify-test":
@@ -6167,7 +7114,25 @@ def run_server(port: int, output_dir: Path) -> None:
     DashboardHandler.progress_html = build_progress_html()
     DashboardHandler.settings_html = build_settings_html()
     DashboardHandler.deep_html = build_deep_analysis_html()
+    paper_worker = DashboardHandler.__new__(DashboardHandler)
     progress_worker = DashboardHandler.__new__(DashboardHandler)
+
+    def _on_paper_crawl_finished(result: Dict[str, Any]) -> None:
+        if not isinstance(result, dict) or not bool(result.get("ok", False)):
+            return
+        try:
+            realtime_result = paper_worker._run_paper_subscriptions(trigger_mode="realtime")
+            total = int(realtime_result.get("total", 0) or 0)
+            success = int(realtime_result.get("success_count", 0) or 0)
+            if total > 0:
+                print(
+                    "[panel] paper realtime subscriptions triggered: "
+                    f"{success}/{total} success"
+                )
+        except Exception as exc:
+            print(f"[panel] warning: paper realtime trigger failed: {type(exc).__name__}: {exc}")
+
+    DashboardHandler.runner.add_on_finished_callback(_on_paper_crawl_finished)
     DashboardHandler.progress_auto_scheduler = ProgressAutoScheduler(
         settings_store=progress_page_settings,
         task_manager=progress_task_manager,
@@ -6197,6 +7162,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-

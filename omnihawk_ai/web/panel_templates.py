@@ -1,4 +1,4 @@
-﻿# coding=utf-8
+# coding=utf-8
 """
 HTML template builders for the PaperScope web panel.
 
@@ -2141,6 +2141,9 @@ def build_panel_html_v2() -> str:
           <label for="paperSubtopics" data-i18n="cfg_subtopics">子领域关键词</label>
           <input id="paperSubtopics" type="text" placeholder="agent, llm, rag, reasoning" />
 
+          <label for="analysisLanguage" data-i18n="cfg_output_language">输出语言</label>
+          <input id="analysisLanguage" type="text" placeholder="Chinese / English / Korean / Japanese / French / Traditional Chinese" />
+
           <label for="aiModel">LLM Model</label>
           <input id="aiModel" type="text" placeholder="qwen3.5-35b-a3b" />
 
@@ -2306,6 +2309,13 @@ def build_panel_html_v2() -> str:
             <option value="email">Email</option>
           </select>
         </label>
+        <label><span data-i18n="sub_strategy">推送策略</span>
+          <select id="subscriptionStrategy">
+            <option value="incremental" data-i18n="strategy_incremental">增量监控</option>
+            <option value="daily" data-i18n="strategy_daily">当日汇总</option>
+            <option value="realtime" data-i18n="strategy_realtime">实时告警</option>
+          </select>
+        </label>
         <label><span data-i18n="sub_limit">订阅条数</span>
           <input id="subscriptionLimit" type="number" min="1" max="500" value="120" />
         </label>
@@ -2397,11 +2407,15 @@ def build_panel_html_v2() -> str:
         sub_name_ph: "订阅名称（可选）",
         sub_source_ph: "来源ID（可选）",
         sub_channel: "通知渠道",
+        sub_strategy: "推送策略",
         sub_limit: "订阅条数",
+        strategy_incremental: "增量监控 (incremental)",
+        strategy_daily: "当日汇总 (daily)",
+        strategy_realtime: "实时告警 (real-time)",
         sub_save: "保存为订阅",
         sub_saving: "保存中...",
         sub_run_all: "执行全部订阅推送",
-        sub_hint: "订阅会保存当前筛选条件，仅推送新增命中论文",
+        sub_hint: "订阅支持当日汇总/增量监控/实时告警三种策略",
         sub_empty: "暂无订阅，可在当前筛选下点击“保存为订阅”。",
         sub_default_name: "订阅",
         sub_enabled: "启用",
@@ -2435,6 +2449,7 @@ def build_panel_html_v2() -> str:
         event_update: "一般更新",
         cfg_primary_category: "论文主分类",
         cfg_subtopics: "子领域关键词",
+        cfg_output_language: "输出语言",
         cfg_paper_max: "每次分析篇数",
         cfg_max_per_source: "每源抓取条数",
         cfg_notify_channel: "默认推送渠道",
@@ -2572,11 +2587,15 @@ def build_panel_html_v2() -> str:
         sub_name_ph: "Subscription Name (Optional)",
         sub_source_ph: "Source ID (Optional)",
         sub_channel: "Channel",
+        sub_strategy: "Strategy",
         sub_limit: "Subscription Limit",
+        strategy_incremental: "Incremental",
+        strategy_daily: "Daily",
+        strategy_realtime: "Real-time",
         sub_save: "Save as Subscription",
         sub_saving: "Saving...",
         sub_run_all: "Run All Subscriptions",
-        sub_hint: "Subscriptions save current filters and only push newly matched papers.",
+        sub_hint: "Subscriptions support Daily, Incremental, and Real-time alert strategies.",
         sub_empty: "No subscriptions yet. Save current filters as a subscription.",
         sub_default_name: "Subscription",
         sub_enabled: "Enabled",
@@ -2610,6 +2629,7 @@ def build_panel_html_v2() -> str:
         event_update: "General Update",
         cfg_primary_category: "Primary Category",
         cfg_subtopics: "Subtopics",
+        cfg_output_language: "Output Language",
         cfg_paper_max: "Max Papers/Run",
         cfg_max_per_source: "Items per Source",
         cfg_notify_channel: "Default Push Channel",
@@ -2747,6 +2767,8 @@ def build_panel_html_v2() -> str:
     }
 
     function currentOutputLanguage() {
+      const explicit = (document.getElementById("analysisLanguage")?.value || state.settings?.analysis_language || "").toString().trim();
+      if (explicit) return explicit;
       return state.lang === "en-US" ? "English" : "Chinese";
     }
 
@@ -2989,6 +3011,7 @@ def build_panel_html_v2() -> str:
             <div class="line">
               <b>${esc(item.name || t("sub_default_name"))}</b>
               <span class="badge">${esc(item.channel || "-")}</span>
+              <span class="badge">${esc(item.strategy || "incremental")}</span>
               <span class="badge">limit:${Number(item.limit || 120)}</span>
               <span class="badge">${item.enabled ? esc(t("sub_enabled")) : esc(t("sub_disabled"))}</span>
             </div>
@@ -3017,11 +3040,13 @@ def build_panel_html_v2() -> str:
       setSubscriptionSaveButtonState(true);
       const name = (document.getElementById("subscriptionName")?.value || "").trim();
       const channel = document.getElementById("subscriptionChannel")?.value || "feishu";
+      const strategy = document.getElementById("subscriptionStrategy")?.value || "incremental";
       const limit = Number(document.getElementById("subscriptionLimit")?.value || 120);
       const enabled = (document.getElementById("subscriptionEnabled")?.value || "1") === "1";
       const payload = {
         name,
         channel,
+        strategy,
         enabled,
         limit,
         mode: document.getElementById("viewMode")?.value || "all",
@@ -3073,6 +3098,8 @@ def build_panel_html_v2() -> str:
         id,
         name: item.name || "",
         channel: item.channel || "feishu",
+        strategy: item.strategy || "incremental",
+        limit: Number(item.limit || 120),
         enabled: !enabledNow,
         mode: item.mode || "all",
         sort_by: item.sort_by || "score",
@@ -3097,6 +3124,8 @@ def build_panel_html_v2() -> str:
       applyFilterInputs(filters);
       const limitEl = document.getElementById("subscriptionLimit");
       if (limitEl) limitEl.value = String(Number(item.limit || 120));
+      const strategyEl = document.getElementById("subscriptionStrategy");
+      if (strategyEl) strategyEl.value = String(item.strategy || "incremental");
       const enabledEl = document.getElementById("subscriptionEnabled");
       if (enabledEl) enabledEl.value = item.enabled ? "1" : "0";
       if (item.mode && document.getElementById("viewMode")) document.getElementById("viewMode").value = item.mode;
@@ -3181,6 +3210,7 @@ def build_panel_html_v2() -> str:
       };
       set("paperPrimaryCategory", data.paper_primary_category || "");
       set("paperSubtopics", data.paper_subtopics || "");
+      set("analysisLanguage", data.analysis_language || (state.lang === "en-US" ? "English" : "Chinese"));
       set("aiModel", normalizeModelName(data.ai_model || ""));
       set("aiBase", data.ai_api_base || "");
       set("aiKey", data.ai_api_key || "");
@@ -5435,6 +5465,9 @@ def build_progress_html() -> str:
           <label><span data-i18n="push_limit">推送条数</span>
             <input id="cfgNotifyLimit" type="number" min="1" max="30" value="8" />
           </label>
+          <label><span data-i18n="output_language">输出语言</span>
+            <input id="cfgOutputLanguage" type="text" placeholder="Chinese / English / Korean / Japanese / French / Traditional Chinese" />
+          </label>
           <label><span data-i18n="auto_interval">定时抓取(分钟)</span>
             <input id="cfgAutoInterval" type="number" min="5" max="1440" value="60" />
           </label>
@@ -5559,6 +5592,13 @@ def build_progress_html() -> str:
               <option value="email">Email</option>
             </select>
           </label>
+          <label><span data-i18n="sub_strategy">推送策略</span>
+            <select id="subStrategy">
+              <option value="incremental" data-i18n="strategy_incremental">增量监控</option>
+              <option value="daily" data-i18n="strategy_daily">当日汇总</option>
+              <option value="realtime" data-i18n="strategy_realtime">实时告警</option>
+            </select>
+          </label>
           <label><span data-i18n="sub_limit">订阅条数</span>
             <input id="subLimit" type="number" min="1" max="200" value="20" />
           </label>
@@ -5634,6 +5674,7 @@ def build_progress_html() -> str:
         push_now: "推送当前结果",
         push_channel: "推送渠道",
         push_limit: "推送条数",
+        output_language: "输出语言",
         search_ph: "关键词（标题/摘要/来源）",
         region: "区域",
         region_any: "全部",
@@ -5698,7 +5739,11 @@ def build_progress_html() -> str:
         opt_yes: "是",
         opt_no: "否",
         sub_name: "订阅名称",
+        sub_strategy: "推送策略",
         sub_limit: "订阅条数",
+        strategy_incremental: "增量监控 (incremental)",
+        strategy_daily: "当日汇总 (daily)",
+        strategy_realtime: "实时告警 (real-time)",
         sub_enabled: "启用",
         sub_save: "保存订阅",
         sub_run_all: "运行全部订阅",
@@ -5751,6 +5796,7 @@ def build_progress_html() -> str:
         push_now: "Push Current Results",
         push_channel: "Push Channel",
         push_limit: "Push Count",
+        output_language: "Output Language",
         search_ph: "Keyword (title/summary/source)",
         region: "Region",
         region_any: "All",
@@ -5815,7 +5861,11 @@ def build_progress_html() -> str:
         opt_yes: "Yes",
         opt_no: "No",
         sub_name: "Subscription Name",
+        sub_strategy: "Strategy",
         sub_limit: "Item Limit",
+        strategy_incremental: "Incremental",
+        strategy_daily: "Daily",
+        strategy_realtime: "Real-time",
         sub_enabled: "Enabled",
         sub_save: "Save Subscription",
         sub_run_all: "Run All Subscriptions",
@@ -6004,9 +6054,7 @@ def build_progress_html() -> str:
       fillSourceOptions();
       renderCards();
       renderProgressSubscriptions();
-      if (state.lang === "zh-CN") {
-        ensureZhTranslations().catch(() => {});
-      }
+      ensureTargetTranslations().catch(() => {});
     }
 
     function toDateText(iso) {
@@ -6154,6 +6202,48 @@ def build_progress_html() -> str:
       applyInputs(state.query);
     }
 
+    function normalizedOutputLanguage() {
+      const configured = String(state.pageSettings?.output_language || "").trim();
+      if (configured) return configured;
+      return state.lang === "en-US" ? "English" : "Chinese";
+    }
+
+    function languageKeyOf(value) {
+      const raw = String(value || "").trim().toLowerCase().replace(/_/g, "-");
+      if (!raw) return "zh";
+      const alias = {
+        english: "en",
+        chinese: "zh",
+        "traditional chinese": "zh-hant",
+        korean: "ko",
+        japanese: "ja",
+        french: "fr",
+      };
+      return alias[raw] || raw.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "zh";
+    }
+
+    function pickProgressLocalized(it, field) {
+      const lang = normalizedOutputLanguage();
+      const langKey = languageKeyOf(lang);
+      const i18n = (it && typeof it.i18n === "object" && it.i18n) ? it.i18n : {};
+      const entry = (i18n && typeof i18n[langKey] === "object") ? i18n[langKey] : {};
+      const mapped = String(entry?.[field] || "").trim();
+      if (mapped) return mapped;
+      if (field === "title") {
+        if (langKey === "zh" || langKey.startsWith("zh-")) return String(it.title_zh || it.title || "");
+        return String(it.title || it.title_zh || "");
+      }
+      if (field === "summary") {
+        if (langKey === "zh" || langKey.startsWith("zh-")) return String(it.summary_zh || it.summary || "");
+        return String(it.summary || it.summary_zh || "");
+      }
+      if (field === "llm_takeaway") {
+        if (langKey === "zh" || langKey.startsWith("zh-")) return String(it.llm_takeaway_zh || it.llm_takeaway || "");
+        return String(it.llm_takeaway || it.llm_takeaway_zh || "");
+      }
+      return "";
+    }
+
     function renderCards() {
       const root = document.getElementById("cards");
       if (!root) return;
@@ -6168,22 +6258,16 @@ def build_progress_html() -> str:
         return;
       }
       root.innerHTML = items.map((it) => {
-        const title = String((state.lang === "zh-CN" ? (it.title_zh || it.title) : it.title) || "");
+        const title = String(pickProgressLocalized(it, "title") || "");
         const url = String(it.url || "");
         const sourceName = String(it.source_name || "");
         const org = String(it.org || "-");
         const region = String(it.region || "-");
         const eventType = String(it.event_type || "update");
         const published = toDateText(it.published_at || "");
-        const summaryRaw = String((state.lang === "zh-CN" ? (it.summary_zh || it.summary) : it.summary) || "");
+        const summaryRaw = String(pickProgressLocalized(it, "summary") || "");
         const summary = summaryRaw.trim();
-        const takeawayRaw = String(
-          (
-            state.lang === "zh-CN"
-              ? (it.llm_takeaway_zh || it.llm_takeaway || "")
-              : (it.llm_takeaway || it.llm_takeaway_zh || "")
-          ) || ""
-        );
+        const takeawayRaw = String(pickProgressLocalized(it, "llm_takeaway") || "");
         const takeaway = takeawayRaw.trim();
         const tags = Array.isArray(it.tags) ? it.tags.filter(Boolean) : [];
         return `
@@ -6230,13 +6314,25 @@ def build_progress_html() -> str:
       }).join("");
     }
 
-    async function ensureZhTranslations() {
-      if (state.lang !== "zh-CN") return;
+    async function ensureTargetTranslations() {
+      const outputLanguage = normalizedOutputLanguage();
+      const langKey = languageKeyOf(outputLanguage);
       const keys = [];
       for (const it of (state.items || [])) {
         const key = String(it.progress_key || "");
         if (!key) continue;
-        if (String(it.title_zh || "").trim() && String(it.summary_zh || "").trim() && String(it.llm_takeaway_zh || "").trim()) continue;
+        const i18n = (it && typeof it.i18n === "object" && it.i18n) ? it.i18n : {};
+        const entry = (i18n && typeof i18n[langKey] === "object") ? i18n[langKey] : {};
+        const titleReady = langKey === "zh" || langKey.startsWith("zh-")
+          ? String(it.title_zh || "").trim()
+          : String(entry?.title || "").trim();
+        const summaryReady = langKey === "zh" || langKey.startsWith("zh-")
+          ? String(it.summary_zh || "").trim()
+          : String(entry?.summary || "").trim();
+        const takeawayReady = langKey === "zh" || langKey.startsWith("zh-")
+          ? String(it.llm_takeaway_zh || "").trim()
+          : String(entry?.llm_takeaway || "").trim();
+        if (titleReady && summaryReady && takeawayReady) continue;
         if (state.translatingKeys[key]) continue;
         state.translatingKeys[key] = true;
         keys.push(key);
@@ -6247,7 +6343,7 @@ def build_progress_html() -> str:
         const data = await fetchJSON("/api/progress/translate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ keys }),
+          body: JSON.stringify({ keys, output_language: outputLanguage }),
         });
         if (Number(data.changed || 0) > 0) {
           await refreshItems();
@@ -6273,9 +6369,7 @@ def build_progress_html() -> str:
       const data = await fetchJSON(`/api/progress?${params.toString()}`);
       state.items = Array.isArray(data.items) ? data.items : [];
       renderCards();
-      if (state.lang === "zh-CN") {
-        ensureZhTranslations().catch(() => {});
-      }
+      ensureTargetTranslations().catch(() => {});
     }
 
     async function runFetch() {
@@ -6367,6 +6461,7 @@ def build_progress_html() -> str:
       set("cfgMaxPerSource", settings.max_per_source || 20);
       set("cfgNotifyChannel", settings.notify_channel || "feishu");
       set("cfgNotifyLimit", settings.notify_limit || 8);
+      set("cfgOutputLanguage", settings.output_language || (state.lang === "en-US" ? "English" : "Chinese"));
       set("cfgAutoEnabled", settings.auto_enabled ? "1" : "0");
       set("cfgAutoInterval", settings.auto_interval_minutes || 60);
       set("cfgAutoPushEnabled", settings.auto_push_enabled ? "1" : "0");
@@ -6401,6 +6496,7 @@ def build_progress_html() -> str:
         max_per_source: Number(document.getElementById("cfgMaxPerSource")?.value || 20),
         notify_channel: String(document.getElementById("cfgNotifyChannel")?.value || "feishu"),
         notify_limit: Number(document.getElementById("cfgNotifyLimit")?.value || 8),
+        output_language: String(document.getElementById("cfgOutputLanguage")?.value || "").trim() || (state.lang === "en-US" ? "English" : "Chinese"),
         auto_enabled: String(document.getElementById("cfgAutoEnabled")?.value || "0") === "1",
         auto_interval_minutes: Number(document.getElementById("cfgAutoInterval")?.value || 60),
         auto_push_enabled: String(document.getElementById("cfgAutoPushEnabled")?.value || "0") === "1",
@@ -6475,6 +6571,7 @@ def build_progress_html() -> str:
             <div class="line">
               <b>${esc(item.name || "-")}</b>
               <span class="badge">${esc(item.channel || "-")}</span>
+              <span class="badge">${esc(item.strategy || "incremental")}</span>
               <span class="badge">${item.enabled ? esc(t("sub_enable")) : esc(t("sub_disable"))}</span>
             </div>
             <div class="line">${esc(preview)}</div>
@@ -6501,6 +6598,7 @@ def build_progress_html() -> str:
         scope: state.activeTab,
         name: String(document.getElementById("subName")?.value || "").trim(),
         channel: String(document.getElementById("subChannel")?.value || "feishu"),
+        strategy: String(document.getElementById("subStrategy")?.value || "incremental"),
         enabled: String(document.getElementById("subEnabled")?.value || "1") === "1",
         limit: Number(document.getElementById("subLimit")?.value || 20),
         filters: {
@@ -6552,6 +6650,7 @@ def build_progress_html() -> str:
         id,
         name: item.name || "",
         channel: item.channel || "feishu",
+        strategy: item.strategy || "incremental",
         limit: Number(item.limit || 120),
         enabled: !enabledNow,
         filters: item.filters || {},
@@ -6568,6 +6667,8 @@ def build_progress_html() -> str:
         region: String(filters.region || ""),
         event_type: String(filters.event_type || ""),
       };
+      const strategyEl = document.getElementById("subStrategy");
+      if (strategyEl) strategyEl.value = String(item.strategy || "incremental");
       applyInputs(state.query);
       refreshItems().catch((e) => setError(e.message || String(e)));
     }

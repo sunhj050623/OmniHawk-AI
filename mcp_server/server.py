@@ -40,6 +40,7 @@ from omnihawk_ai.web.panel_server import (
     normalize_panel_filters,
     normalize_progress_filters,
     normalize_progress_scope,
+    normalize_subscription_strategy,
     parse_bool_text,
     parse_int_value,
 )
@@ -449,10 +450,11 @@ async def list_scope_items(
     date_to: str = "",
     sort_by: str = "time",
     sort_order: str = "desc",
+    output_language: str = "Chinese",
     enrich: bool = False,
     force_enrich: bool = False,
 ) -> str:
-    """List items in one progress scope with optional LLM Chinese enrichment."""
+    """List items in one progress scope with optional LLM multilingual enrichment."""
 
     def worker() -> Dict[str, Any]:
         ctx = _ensure_context()
@@ -469,6 +471,7 @@ async def list_scope_items(
             sort_by=sort_by,
             sort_order=sort_order,
         )
+        lang = normalize_analysis_language(output_language, default="Chinese")
         data = ctx.progress.list_items(**req)
         enrichment: Dict[str, Any] = {
             "ok": True,
@@ -486,6 +489,7 @@ async def list_scope_items(
             if keys:
                 enrichment = ctx.helper._translate_progress_items(
                     keys=keys,
+                    output_language=lang,
                     force=bool(parse_bool_text(force_enrich, False)),
                     max_workers=2,
                     allow_skip_unconfigured=True,
@@ -495,6 +499,7 @@ async def list_scope_items(
         data["scope"] = scope_key
         data["name_zh"] = PROGRESS_SCOPE_NAME_MAP_ZH.get(scope_key, scope_key)
         data["kind"] = req["kind"]
+        data["output_language"] = lang
         data["enrichment"] = enrichment
         return data
 
@@ -507,15 +512,17 @@ async def fetch_scope_items(
     scope: str = "frontier",
     max_per_source: int = 20,
     source_ids: Optional[List[str]] = None,
+    output_language: str = "Chinese",
     enrich: bool = True,
     force_enrich: bool = False,
 ) -> str:
-    """Fetch latest items for one scope, then optionally enrich Chinese card fields."""
+    """Fetch latest items for one scope, then optionally enrich localized card fields."""
 
     def worker() -> Dict[str, Any]:
         ctx = _ensure_context()
         scope_key = _normalize_scope(scope)
         safe_max = parse_int_value(max_per_source, 1, 120) or 20
+        lang = normalize_analysis_language(output_language, default="Chinese")
         requested_ids = _clean_text_list(source_ids)
         allowed_ids = ctx.helper._resolve_progress_source_ids(scope_key, requested_ids)
         result = ctx.progress.fetch(max_per_source=safe_max, source_ids=allowed_ids)
@@ -538,6 +545,7 @@ async def fetch_scope_items(
         if bool(parse_bool_text(enrich, True)) and changed_keys:
             enrichment = ctx.helper._translate_progress_items(
                 keys=changed_keys,
+                output_language=lang,
                 force=bool(parse_bool_text(force_enrich, False)),
                 max_workers=2,
                 allow_skip_unconfigured=True,
@@ -548,6 +556,7 @@ async def fetch_scope_items(
         result["kind"] = str(PROGRESS_SCOPE_KIND_MAP.get(scope_key, PROGRESS_SCOPE_KIND_MAP["frontier"]))
         result["requested_source_ids"] = requested_ids
         result["effective_source_ids"] = allowed_ids
+        result["output_language"] = lang
         result["enrichment"] = enrichment
         return result
 
@@ -610,6 +619,7 @@ async def upsert_scope_subscription(
     filters: Optional[Dict[str, Any]] = None,
     enabled: bool = True,
     limit: int = 120,
+    strategy: str = "incremental",
     sub_id: str = "",
 ) -> str:
     """Create or update one scope subscription."""
@@ -620,6 +630,7 @@ async def upsert_scope_subscription(
         safe_channel = _normalize_channel(channel)
         safe_filters = normalize_progress_filters(filters if isinstance(filters, dict) else {})
         safe_limit = parse_int_value(limit, 1, 500) or 120
+        safe_strategy = normalize_subscription_strategy(strategy, default="incremental")
         saved = ctx.progress_subscriptions.upsert(
             scope=scope_key,
             name=str(name or "").strip(),
@@ -627,6 +638,7 @@ async def upsert_scope_subscription(
             filters=safe_filters,
             enabled=bool(parse_bool_text(enabled, True)),
             limit=safe_limit,
+            strategy=safe_strategy,
             sub_id=str(sub_id or "").strip(),
         )
         items = ctx.progress_subscriptions.list(scope_key)
@@ -894,6 +906,7 @@ async def upsert_paper_subscription(
     sort_order: str = "desc",
     history: str = "all",
     limit: int = 120,
+    strategy: str = "incremental",
 ) -> str:
     """Create or update one paper subscription."""
 
@@ -913,6 +926,7 @@ async def upsert_paper_subscription(
         if safe_history not in {"all", "latest"}:
             safe_history = "all"
         safe_limit = parse_int_value(limit, 1, 500) or 120
+        safe_strategy = normalize_subscription_strategy(strategy, default="incremental")
 
         saved = ctx.paper_subscriptions.upsert(
             name=str(name or "").strip(),
@@ -921,6 +935,7 @@ async def upsert_paper_subscription(
             enabled=bool(parse_bool_text(enabled, True)),
             sub_id=str(sub_id or "").strip(),
             mode=safe_mode,
+            strategy=safe_strategy,
             sort_by=safe_sort_by,
             sort_order=safe_sort_order,
             history=safe_history,

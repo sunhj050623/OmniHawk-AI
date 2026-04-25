@@ -2170,6 +2170,25 @@ def _normalize_text(value: Any) -> str:
     return text.strip()
 
 
+def _normalize_lang_key(value: Any) -> str:
+    raw = str(value or "").strip().lower().replace("_", "-")
+    if not raw:
+        return ""
+    alias = {
+        "english": "en",
+        "chinese": "zh",
+        "traditional chinese": "zh-hant",
+        "korean": "ko",
+        "japanese": "ja",
+        "french": "fr",
+    }
+    mapped = alias.get(raw)
+    if mapped:
+        return mapped
+    safe = re.sub(r"[^a-z0-9\\-]+", "-", raw).strip("-")
+    return safe
+
+
 DEFAULT_SOURCE_MAX_AGE_DAYS = 90
 SEEN_HISTORY_RETENTION_DAYS = 365
 TRACKING_QUERY_KEYS = {
@@ -2766,6 +2785,23 @@ class AIProgressRepository:
         summary = _normalize_text(item.get("summary", ""))[:6000]
         summary_zh = _normalize_text(item.get("summary_zh", ""))[:6000]
         llm_takeaway_zh = _normalize_text(item.get("llm_takeaway_zh", ""))[:600]
+        raw_i18n = item.get("i18n") if isinstance(item.get("i18n"), dict) else {}
+        i18n: Dict[str, Dict[str, str]] = {}
+        if isinstance(raw_i18n, dict):
+            for raw_lang, raw_payload in raw_i18n.items():
+                lang_key = _normalize_lang_key(raw_lang)
+                if not lang_key or not isinstance(raw_payload, dict):
+                    continue
+                entry_title = _normalize_text(raw_payload.get("title", ""))[:400]
+                entry_summary = _normalize_text(raw_payload.get("summary", ""))[:6000]
+                entry_takeaway = _normalize_text(raw_payload.get("llm_takeaway", ""))[:600]
+                if not (entry_title or entry_summary or entry_takeaway):
+                    continue
+                i18n[lang_key] = {
+                    "title": entry_title,
+                    "summary": entry_summary,
+                    "llm_takeaway": entry_takeaway,
+                }
         tags_raw = item.get("tags") if isinstance(item.get("tags"), list) else []
         tags = [_normalize_text(x) for x in tags_raw if _normalize_text(x)]
         canonical = url or f"{source_id}:{title}:{published_at}"
@@ -2783,6 +2819,7 @@ class AIProgressRepository:
             "summary": summary,
             "summary_zh": summary_zh,
             "llm_takeaway_zh": llm_takeaway_zh,
+            "i18n": i18n,
             "url": url,
             "published_at": published_at,
             "tags": tags,
@@ -3906,10 +3943,24 @@ class AIProgressRepository:
                 patch = translations.get(key) if isinstance(translations, dict) else None
                 if not key or not isinstance(patch, dict):
                     continue
+                lang_key = _normalize_lang_key(
+                    patch.get("output_language")
+                    or patch.get("target_language")
+                    or patch.get("language")
+                    or patch.get("lang")
+                    or ""
+                )
                 title_zh = _normalize_text(patch.get("title_zh", ""))
                 summary_zh = _normalize_text(patch.get("summary_zh", ""))
                 llm_takeaway_zh = _normalize_text(patch.get("llm_takeaway_zh", ""))
+                title_any = _normalize_text(patch.get("title", ""))
+                summary_any = _normalize_text(patch.get("summary", ""))
+                llm_takeaway_any = _normalize_text(patch.get("llm_takeaway", ""))
                 updated = False
+
+                i18n_raw = item.get("i18n") if isinstance(item.get("i18n"), dict) else {}
+                i18n_map = {str(k): dict(v) for k, v in i18n_raw.items() if isinstance(v, dict)}
+
                 if title_zh and title_zh != str(item.get("title_zh", "")):
                     item["title_zh"] = title_zh
                     updated = True
@@ -3919,6 +3970,23 @@ class AIProgressRepository:
                 if llm_takeaway_zh and llm_takeaway_zh != str(item.get("llm_takeaway_zh", "")):
                     item["llm_takeaway_zh"] = llm_takeaway_zh
                     updated = True
+
+                if lang_key:
+                    lang_entry = i18n_map.get(lang_key) if isinstance(i18n_map.get(lang_key), dict) else {}
+                    normalized_entry = {
+                        "title": title_any or title_zh or str(lang_entry.get("title", "") or ""),
+                        "summary": summary_any or summary_zh or str(lang_entry.get("summary", "") or ""),
+                        "llm_takeaway": (
+                            llm_takeaway_any
+                            or llm_takeaway_zh
+                            or str(lang_entry.get("llm_takeaway", "") or "")
+                        ),
+                    }
+                    if normalized_entry != lang_entry and any(normalized_entry.values()):
+                        i18n_map[lang_key] = normalized_entry
+                        item["i18n"] = i18n_map
+                        updated = True
+
                 if updated:
                     items[idx] = item
                     changed += 1
