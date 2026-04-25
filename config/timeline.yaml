@@ -1,0 +1,235 @@
+﻿# OmniHawk AI 时间线调度配置
+# Version: 2.0.0
+
+presets:
+  always_on:
+    name: "全天监控"
+    description: "全天候采集与推送，有新增就通知。"
+    default:
+      collect: true
+      analyze: false
+      ai_mode: "current"
+      push: true
+      report_mode: "incremental"
+      once:
+        analyze: false
+        push: false
+    periods: {}
+    day_plans:
+      all_day:
+        periods: []
+    week_map:
+      1: "all_day"
+      2: "all_day"
+      3: "all_day"
+      4: "all_day"
+      5: "all_day"
+      6: "all_day"
+      7: "all_day"
+
+  morning_evening:
+    name: "早晚汇总"
+    description: "全天追踪，晚间做一次日汇总。"
+    default:
+      collect: true
+      analyze: true
+      ai_mode: "current"
+      push: true
+      report_mode: "current"
+      once:
+        analyze: false
+        push: false
+    periods:
+      evening_summary:
+        name: "晚间汇总"
+        start: "20:00"
+        end: "22:00"
+        analyze: true
+        ai_mode: "daily"
+        push: true
+        report_mode: "daily"
+        once:
+          analyze: true
+          push: true
+    day_plans:
+      all_day:
+        periods: ["evening_summary"]
+    week_map:
+      1: "all_day"
+      2: "all_day"
+      3: "all_day"
+      4: "all_day"
+      5: "all_day"
+      6: "all_day"
+      7: "all_day"
+
+  office_hours:
+    name: "办公时间"
+    description: "工作日三段式推送，周末增量推送。"
+    default:
+      collect: true
+      analyze: false
+      ai_mode: "current"
+      push: false
+      report_mode: "current"
+      once:
+        analyze: true
+        push: true
+    periods:
+      morning_briefing:
+        name: "到岗速览"
+        start: "09:00"
+        end: "11:00"
+        analyze: true
+        ai_mode: "current"
+        push: true
+        report_mode: "current"
+      noon_update:
+        name: "午间热点"
+        start: "13:00"
+        end: "15:00"
+        analyze: false
+        push: true
+        report_mode: "current"
+      closing_summary:
+        name: "收工汇总"
+        start: "17:00"
+        end: "19:00"
+        analyze: true
+        ai_mode: "daily"
+        push: true
+        report_mode: "daily"
+      weekend_free:
+        name: "周末自由"
+        start: "08:00"
+        end: "23:00"
+        analyze: false
+        ai_mode: "current"
+        push: true
+        report_mode: "incremental"
+        once:
+          analyze: false
+          push: false
+    day_plans:
+      workday:
+        periods: ["morning_briefing", "noon_update", "closing_summary"]
+      weekend:
+        periods: ["weekend_free"]
+    week_map:
+      1: "workday"
+      2: "workday"
+      3: "workday"
+      4: "workday"
+      5: "workday"
+      6: "weekend"
+      7: "weekend"
+
+  night_owl:
+    name: "夜猫子模式"
+    description: "午后速览，深夜日汇总。"
+    default:
+      collect: true
+      analyze: false
+      ai_mode: "current"
+      push: false
+      report_mode: "current"
+      once:
+        analyze: true
+        push: true
+    periods:
+      afternoon_peek:
+        name: "午后速览"
+        start: "15:00"
+        end: "17:00"
+        analyze: true
+        ai_mode: "current"
+        push: true
+        report_mode: "current"
+      late_night:
+        name: "深夜汇总"
+        start: "22:00"
+        end: "01:00"
+        analyze: true
+        ai_mode: "daily"
+        push: true
+        report_mode: "daily"
+    day_plans:
+      all_day:
+        periods: ["afternoon_peek", "late_night"]
+    week_map:
+      1: "all_day"
+      2: "all_day"
+      3: "all_day"
+      4: "all_day"
+      5: "all_day"
+      6: "all_day"
+      7: "all_day"
+
+custom:
+  name: "自定义"
+  description: "完全自由定义时间段、日计划和周映射。"
+  default:
+    collect: true
+    analyze: false
+    ai_mode: "follow_report"
+    push: false
+    report_mode: "current"
+    once:
+      analyze: true
+      push: true
+  periods:
+    deep_quiet:
+      name: "深夜静默"
+      start: "23:00"
+      end: "06:00"
+      collect: true
+      analyze: false
+      push: false
+      report_mode: "incremental"
+    workday_morning:
+      name: "工作日早间"
+      start: "08:00"
+      end: "10:00"
+      collect: true
+      analyze: false
+      push: true
+      report_mode: "incremental"
+      once:
+        push: true
+    weekend_morning:
+      name: "周末早间"
+      start: "10:00"
+      end: "12:00"
+      collect: true
+      analyze: false
+      push: true
+      report_mode: "daily"
+      once:
+        push: true
+    evening_summary:
+      name: "晚间汇总"
+      start: "19:00"
+      end: "21:00"
+      collect: true
+      analyze: true
+      ai_mode: "daily"
+      push: true
+      report_mode: "daily"
+      once:
+        analyze: true
+        push: true
+  day_plans:
+    workday:
+      periods: ["deep_quiet", "workday_morning", "evening_summary"]
+    weekend:
+      periods: ["deep_quiet", "weekend_morning", "evening_summary"]
+  week_map:
+    1: "workday"
+    2: "workday"
+    3: "workday"
+    4: "workday"
+    5: "workday"
+    6: "weekend"
+    7: "weekend"
+  overlap:
+    policy: "error_on_overlap"

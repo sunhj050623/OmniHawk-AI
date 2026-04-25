@@ -1,0 +1,93 @@
+﻿# OmniHawk AI 关键词配置
+# Version: 2.0.0
+# 说明：
+# 1. [GLOBAL_FILTER] 为全局过滤词。
+# 2. [WORD_GROUPS] 为关注关键词组。
+# 3. 支持语法：
+#    - 普通词：直接写
+#    - 正则：/pattern/
+#    - 别名：... => 显示名
+#    - 必须词：+关键词
+#    - 排除词：!关键词
+#    - 数量限制：@数字
+
+[GLOBAL_FILTER]
+营销号
+抽奖
+广告
+博彩
+返利
+刷单
+
+
+[WORD_GROUPS]
+
+[AI头部模型]
+/OpenAI|ChatGPT|GPT-4\.1|GPT-5|o3|o4-mini|Sora|DALL-E|Codex/ => OpenAI
+/Claude|Anthropic|Haiku|Sonnet|Opus/ => Anthropic
+/Gemini|DeepMind|Google AI Studio|Vertex AI/ => Google AI
+/Llama|Meta AI/ => Meta AI
+/Grok|xAI/ => xAI
+/DeepSeek|R1|V3|V4/ => DeepSeek
+/Qwen|通义千问|阿里云百炼/ => Qwen
+/GLM|智谱|Zhipu/ => GLM
+/MiniMax|海螺/ => MiniMax
+
+[AI基础设施]
+/NVIDIA|英伟达|Blackwell|CUDA|TensorRT|DGX/ => NVIDIA
+/AMD|MI300|Instinct|ROCm/ => AMD
+/TPU|Google TPU|Trainium|Inferentia/ => AI 芯片
+/数据中心|机房|液冷|电力|算力|推理成本|tokens\/s/ => 算力基础设施
+
+[中国AI公司]
+/华为|鸿蒙|昇腾|盘古|鲲鹏/ => 华为
+/腾讯|混元|元宝|微信AI/ => 腾讯
+/阿里|通义|百炼|魔搭/ => 阿里
+/字节|豆包|火山引擎|扣子/ => 字节跳动
+/百度|文心|千帆/ => 百度
+
+[全球科技巨头]
+/Microsoft|微软|Azure|Copilot/ => 微软
+/Google|谷歌|Alphabet|YouTube|Waymo/ => 谷歌
+/Amazon|AWS|Bedrock/ => 亚马逊
+/Apple|苹果|WWDC|Siri/ => 苹果
+/Meta|Facebook|Instagram|WhatsApp/ => Meta
+
+[资本市场-美股]
+/NASDAQ|NYSE|美股|盘后|财报|guidance|CapEx|回购|增发/ => 美股动态
+/NVDA|MSFT|GOOGL|AMZN|META|AAPL|TSLA|AMD|AVGO|ASML/ => AI相关美股
+
+[资本市场-中国大陆与港股]
+/A股|科创板|创业板|港股|恒生科技|北向资金/ => 中港市场
+/中芯国际|寒武纪|科大讯飞|金山办公|商汤|第四范式|优必选/ => 中国AI产业链
+
+[资本市场-日韩与欧洲]
+/日经225|TOPIX|东京证券交易所|TSE/ => 日本市场
+/KOSPI|KOSDAQ|韩国交易所|KRX/ => 韩国市场
+/FTSE|DAX|CAC40|Euronext|LSE/ => 欧洲市场
+
+[并购与融资]
+/融资|并购|收购|IPO|二级发行|战略投资|funding|M&A/ => 融资并购
+/软银|红杉|a16z|Tiger Global|淡马锡|主权基金/ => 机构资本
+
+[政策监管与安全]
+/AI Act|欧盟AI法案|NIST|监管沙盒|合规|数据跨境|隐私/ => 政策监管
+/模型安全|越狱|提示注入|数据泄露|版权纠纷|滥用|事故/ => 安全事故
+
+[产业报告]
+/Gartner|McKinsey|BCG|Deloitte|IDC|Forrester|OECD|World Bank|IMF/ => 国际报告
+/白皮书|行业报告|市场规模|渗透率|TAM|SAM|SOM/ => 产业研究
+
+[开源生态与开发者]
+/GitHub Trending|Hugging Face|开源模型|权重|checkpoint/ => 开源模型
+/LangChain|LlamaIndex|Haystack|RAG|向量数据库|Milvus|FAISS|pgvector/ => AI开发工具
+/vLLM|TensorRT-LLM|SGLang|Ollama|LM Studio|推理引擎/ => 推理工具链
+/评测|benchmark|MMLU|SWE-bench|LiveBench|Arena/ => 模型评测
+
+[机器人与自动驾驶]
+/机器人|人形机器人|具身智能|机械臂|四足|无人配送/ => 机器人
+/FSD|自动驾驶|智驾|L4|无人出租|Robotaxi/ => 自动驾驶
+
+[航天与前沿科技]
+/SpaceX|Starlink|火箭|卫星互联网|航天/ => 航天
+/量子计算|脑机接口|基因编辑|生物计算/ => 前沿科技

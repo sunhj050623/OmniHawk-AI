@@ -1,0 +1,72 @@
+﻿# yaml-language-server: $schema=https://json.schemastore.org/github-issue-forms.json
+
+name: 🐞 Bug Report
+description: 程序报错、行为异常或结果不符合预期
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请确认：
+        - 已拉取最新代码或最新镜像
+        - 已检查 README 的运行步骤
+        - 日志中敏感信息（API Key、邮箱密码等）已脱敏
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本信息
+      description: 例如 `v1.2.3`、Docker 镜像 tag、或 commit hash
+      placeholder: v1.2.3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: 部署方式
+      options:
+        - Docker
+        - GitHub Actions
+        - Local Python
+        - MCP Client
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: 问题类别
+      options:
+        - 抓取/去重
+        - 页面与交互
+        - 推送通知
+        - AI 分析/翻译
+        - MCP 工具
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 执行了什么操作
+        2. 出现了什么结果
+        3. 你预期应该是什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志与截图（可选）
+      description: 建议粘贴关键日志片段并附上完整截图
+      placeholder: |
+        ```text
+        paste logs here
+        ```
+    validations:
+      required: false

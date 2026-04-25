@@ -1,0 +1,213 @@
+﻿# OmniHawk AI 配置文件
+# Version: 2.3.0
+
+app:
+  timezone: "Asia/Shanghai"
+  show_version_update: false
+
+schedule:
+  enabled: true
+  preset: "morning_evening"
+
+platforms:
+  enabled: false
+  sources:
+    - id: "toutiao"
+      name: "今日头条"
+    - id: "baidu"
+      name: "百度热搜"
+    - id: "wallstreetcn-hot"
+      name: "华尔街见闻"
+    - id: "thepaper"
+      name: "澎湃新闻"
+    - id: "bilibili-hot-search"
+      name: "Bilibili 热搜"
+    - id: "cls-hot"
+      name: "财联社热门"
+    - id: "ifeng"
+      name: "凤凰网"
+    - id: "tieba"
+      name: "贴吧"
+    - id: "weibo"
+      name: "微博"
+    - id: "douyin"
+      name: "抖音"
+    - id: "zhihu"
+      name: "知乎"
+
+rss:
+  enabled: true
+  freshness_filter:
+    enabled: true
+    max_age_days: 7
+  feeds:
+    - id: "arxiv-cs-ai"
+      name: "arXiv CS.AI"
+      url: "https://export.arxiv.org/rss/cs.AI"
+    - id: "arxiv-cs-lg"
+      name: "arXiv CS.LG"
+      url: "https://export.arxiv.org/rss/cs.LG"
+    - id: "arxiv-cs-cl"
+      name: "arXiv CS.CL"
+      url: "https://export.arxiv.org/rss/cs.CL"
+
+report:
+  mode: "current"
+  display_mode: "keyword"
+  rank_threshold: 5
+  sort_by_position_first: false
+  max_news_per_keyword: 0
+
+filter:
+  method: "keyword"
+  priority_sort_enabled: false
+
+ai_filter:
+  batch_size: 200
+  batch_interval: 2
+  interests_file: null
+  prompt_file: "prompt.txt"
+  extract_prompt_file: "extract_prompt.txt"
+  update_tags_prompt_file: "update_tags_prompt.txt"
+  reclassify_threshold: 0.6
+  min_score: 0.7
+
+display:
+  region_order:
+    - ai_analysis
+    - hotlist
+    - new_items
+    - rss
+    - standalone
+  regions:
+    ai_analysis: true
+    hotlist: true
+    new_items: false
+    rss: true
+    standalone: false
+  standalone:
+    platforms:
+      - "zhihu"
+      - "wallstreetcn-hot"
+    rss_feeds: []
+    max_items: 20
+
+notification:
+  enabled: true
+  channels:
+    feishu:
+      webhook_url: ""
+    dingtalk:
+      webhook_url: ""
+    wework:
+      webhook_url: ""
+      msg_type: "markdown"
+    telegram:
+      bot_token: ""
+      chat_id: ""
+    ntfy:
+      server_url: "https://ntfy.sh"
+      topic: ""
+      token: ""
+    bark:
+      url: ""
+    slack:
+      webhook_url: ""
+    email:
+      from: ""
+      password: ""
+      to: ""
+      smtp_server: "smtp.qq.com"
+      smtp_port: "465"
+    generic_webhook:
+      webhook_url: ""
+      payload_template: ""
+
+storage:
+  backend: "auto"
+  formats:
+    sqlite: true
+    txt: false
+    html: true
+  local:
+    data_dir: "output"
+    retention_days: 0
+  remote:
+    endpoint_url: ""
+    bucket_name: ""
+    access_key_id: ""
+    secret_access_key: ""
+    region: ""
+    retention_days: 0
+  pull:
+    enabled: false
+    days: 7
+
+ai:
+  model: ""
+  api_key: ""
+  api_base: ""
+  timeout: 120
+  temperature: 1.0
+  max_tokens: 5000
+  num_retries: 2
+  fallback_models: []
+  extra_params: {}
+
+ai_analysis:
+  enabled: false
+  language: "Chinese"
+  prompt_file: "ai_analysis_prompt.txt"
+  mode: "follow_report"
+  max_news_for_analysis: 150
+  include_rss: false
+  include_rank_timeline: true
+  include_standalone: true
+
+paper_analysis:
+  enabled: false
+  prompt_file: "paper_analysis_prompt.txt"
+  max_papers_per_run: 8
+  max_abstract_chars: 3000
+  timeout: 120
+  max_tokens: 1200
+  language: "Chinese"
+  research_topic: ""
+  primary_category: ""
+  subtopics: ""
+
+ai_translation:
+  enabled: false
+  language: "English"
+  prompt_file: "ai_translation_prompt.txt"
+  scope:
+    hotlist: true
+    rss: true
+    standalone: true
+
+advanced:
+  version_check_url: ""
+  configs_version_check_url: ""
+  debug: false
+  batch_size:
+    default: 4000
+    dingtalk: 20000
+    feishu: 29000
+    bark: 3600
+    slack: 4000
+  batch_send_interval: 1.0
+  feishu_message_separator: "---"
+  max_accounts_per_channel: 3
+  crawler:
+    request_interval: 100
+    use_proxy: false
+    default_proxy: ""
+  rss:
+    request_interval: 2000
+    timeout: 15
+    use_proxy: false
+    proxy_url: ""
+  weight:
+    rank: 0.6
+    frequency: 0.3
+    hotness: 0.1

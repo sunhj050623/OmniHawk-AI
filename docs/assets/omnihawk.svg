@@ -1,0 +1,71 @@
+<svg width="1200" height="520" viewBox="0 0 1200 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">OmniHawk AI Emblem</title>
+  <desc id="desc">Stylized hawk with radar rings representing global AI intelligence scanning and signal routing.</desc>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="50" x2="1120" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A1024"/>
+      <stop offset="1" stop-color="#071226"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="260" y1="88" x2="260" y2="432" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7AFCD2"/>
+      <stop offset="1" stop-color="#1FA7FF"/>
+    </linearGradient>
+    <linearGradient id="hawkWing" x1="408" y1="152" x2="872" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8CF9D8"/>
+      <stop offset="0.35" stop-color="#48D7A7"/>
+      <stop offset="1" stop-color="#0F6BFF"/>
+    </linearGradient>
+    <linearGradient id="beak" x1="764" y1="248" x2="910" y2="264" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD67A"/>
+      <stop offset="1" stop-color="#FF9A4B"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="20" y="20" width="1160" height="480" rx="28" fill="url(#bg)"/>
+  <rect x="20" y="20" width="1160" height="480" rx="28" stroke="#29446A" stroke-opacity="0.45"/>
+
+  <g opacity="0.95">
+    <circle cx="260" cy="260" r="172" stroke="url(#ring)" stroke-width="2" stroke-opacity="0.68"/>
+    <circle cx="260" cy="260" r="128" stroke="url(#ring)" stroke-width="2" stroke-opacity="0.5"/>
+    <circle cx="260" cy="260" r="86" stroke="url(#ring)" stroke-width="2" stroke-opacity="0.42"/>
+    <circle cx="260" cy="260" r="44" stroke="url(#ring)" stroke-width="2" stroke-opacity="0.34"/>
+    <path d="M260 84V436M84 260H436" stroke="#49D9B4" stroke-opacity="0.34"/>
+    <circle cx="260" cy="260" r="8" fill="#A5FFE6" filter="url(#glow)"/>
+    <circle cx="370" cy="152" r="5.5" fill="#7BF8D0"/>
+    <circle cx="168" cy="372" r="5.5" fill="#7BF8D0"/>
+    <circle cx="392" cy="328" r="4.8" fill="#5CD6FF"/>
+  </g>
+
+  <g>
+    <path d="M383 304C434 170 583 123 710 150C772 163 836 197 883 245C804 241 749 258 697 300C653 335 607 375 533 385C467 394 411 365 383 304Z" fill="url(#hawkWing)"/>
+    <path d="M632 184C686 171 734 183 777 212C744 214 708 226 677 247C651 265 628 289 598 299C560 311 523 302 500 278C526 221 574 193 632 184Z" fill="#E8FFF8" fill-opacity="0.9"/>
+    <path d="M768 248C816 243 862 252 916 270C869 280 832 301 796 330C777 306 767 280 768 248Z" fill="url(#beak)"/>
+    <path d="M673 259C688 259 700 270 700 286C700 301 688 313 673 313C658 313 646 301 646 286C646 270 658 259 673 259Z" fill="#051127"/>
+    <circle cx="665" cy="279" r="4" fill="#9ED7FF"/>
+    <path d="M447 322C522 354 591 346 651 304" stroke="#A6FFE8" stroke-width="3" stroke-linecap="round" stroke-opacity="0.68"/>
+    <path d="M470 359C546 382 621 373 698 336" stroke="#5FD9FF" stroke-width="2" stroke-linecap="round" stroke-opacity="0.58"/>
+  </g>
+
+  <g opacity="0.8">
+    <path d="M742 186L1042 118" stroke="#42CBFF" stroke-opacity="0.35"/>
+    <circle cx="1042" cy="118" r="6" fill="#4FD7FF"/>
+    <path d="M771 219L1087 224" stroke="#5EE6C8" stroke-opacity="0.38"/>
+    <circle cx="1087" cy="224" r="6" fill="#7AFCD2"/>
+    <path d="M792 255L1070 330" stroke="#5AA7FF" stroke-opacity="0.33"/>
+    <circle cx="1070" cy="330" r="6" fill="#67B8FF"/>
+    <path d="M772 304L1020 414" stroke="#4BE1B6" stroke-opacity="0.35"/>
+    <circle cx="1020" cy="414" r="6" fill="#70FFD8"/>
+  </g>
+
+  <g>
+    <text x="468" y="430" fill="#EAF6FF" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="56" font-weight="800" letter-spacing="1.6">OmniHawk AI</text>
+    <text x="470" y="463" fill="#9BC3E8" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="22" letter-spacing="0.7">Global AI Signals • Radar • Analysis • Automation</text>
+  </g>
+</svg>

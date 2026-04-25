@@ -1,0 +1,42 @@
+﻿# coding=utf-8
+"""
+OmniHawk AI 模块
+
+提供 AI 大模型相关能力：热点分析、论文分析、智能筛选与翻译。
+"""
+
+from .analyzer import AIAnalyzer, AIAnalysisResult
+from .paper_analyzer import PaperAnalyzer
+from .filter import AIFilter, AIFilterResult
+from .translator import AITranslator, TranslationResult, BatchTranslationResult
+from .formatter import (
+    get_ai_analysis_renderer,
+    render_ai_analysis_markdown,
+    render_ai_analysis_feishu,
+    render_ai_analysis_dingtalk,
+    render_ai_analysis_html,
+    render_ai_analysis_html_rich,
+    render_ai_analysis_plain,
+)
+
+__all__ = [
+    # 分析器
+    "AIAnalyzer",
+    "AIAnalysisResult",
+    "PaperAnalyzer",
+    # 智能筛选
+    "AIFilter",
+    "AIFilterResult",
+    # 翻译器
+    "AITranslator",
+    "TranslationResult",
+    "BatchTranslationResult",
+    # 格式化输出
+    "get_ai_analysis_renderer",
+    "render_ai_analysis_markdown",
+    "render_ai_analysis_feishu",
+    "render_ai_analysis_dingtalk",
+    "render_ai_analysis_html",
+    "render_ai_analysis_html_rich",
+    "render_ai_analysis_plain",
+]

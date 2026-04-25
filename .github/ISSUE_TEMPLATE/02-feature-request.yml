@@ -1,0 +1,43 @@
+﻿# yaml-language-server: $schema=https://json.schemastore.org/github-issue-forms.json
+
+name: ✨ Feature Request
+description: 功能建议、交互优化、体验改进
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请尽量描述「业务价值 + 具体行为 + 验收标准」，便于快速评估与实现。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决的问题
+      placeholder: 当前痛点是什么？为什么现有方案不够好？
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望方案
+      placeholder: 希望新增/修改哪些功能？页面、接口、配置分别怎么变化？
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准（可选）
+      placeholder: 列出 2-5 条可验证的验收条件
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考资料（可选）
+      placeholder: 竞品、截图、链接、原型等
+    validations:
+      required: false

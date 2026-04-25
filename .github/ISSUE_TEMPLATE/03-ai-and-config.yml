@@ -1,0 +1,56 @@
+﻿# yaml-language-server: $schema=https://json.schemastore.org/github-issue-forms.json
+
+name: 🤖 AI / Config Help
+description: AI 提示词分享、模型配置求助、渠道配置求助
+title: "[AI/Config] "
+labels: ["config", "AI"]
+body:
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: 类型
+      options:
+        - 分享提示词
+        - AI 分析效果求助
+        - 推送渠道配置求助
+        - 抓取参数配置求助
+    validations:
+      required: true
+
+  - type: input
+    id: ai_model
+    attributes:
+      label: AI 模型（可选）
+      placeholder: openai/gpt-4o 或 anthropic/claude-3.7-sonnet
+    validations:
+      required: false
+
+  - type: textarea
+    id: details
+    attributes:
+      label: 详细说明
+      placeholder: |
+        - 你当前的配置是什么
+        - 你遇到了什么问题
+        - 你希望达到的目标效果
+    validations:
+      required: true
+
+  - type: textarea
+    id: snippets
+    attributes:
+      label: 配置片段 / 提示词（可选）
+      placeholder: |
+        ```yaml
+        # masked config snippet
+        ```
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图（可选）
+      placeholder: 附上关键页面截图（建议完整截图）
+    validations:
+      required: false

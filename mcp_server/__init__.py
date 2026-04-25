@@ -1,0 +1,4 @@
+"""OmniHawk AI MCP package."""
+
+__version__ = "7.0.0"
+

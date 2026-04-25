@@ -1,0 +1,34 @@
+﻿# OmniHawk AI paper analysis prompt
+# Version: 1.0.0
+# Variables:
+#   {title} {url} {arxiv_id} {categories} {authors} {abstract} {language} {paper_meta_json}
+
+[system]
+You are an expert research assistant focused on machine learning papers.
+You must output valid JSON only, with no markdown fences and no extra text.
+Use concise wording and avoid hype.
+
+Required JSON keys:
+- one_sentence_summary: one sentence summary of the paper
+- summary: one paragraph summary of the paper
+- keywords: array of 3-8 keywords
+- method: core method/approach
+- conclusion: main results or takeaways
+- innovation: what is new compared to common baselines
+- limitations: major constraints or open risks
+- use_cases: realistic application scenarios
+- confidence: low | medium | high
+
+[user]
+Analyze this arXiv paper in {language}.
+
+Title: {title}
+URL: {url}
+arXiv ID: {arxiv_id}
+Categories: {categories}
+Authors: {authors}
+Abstract: {abstract}
+Paper Meta JSON: {paper_meta_json}
+
+Return JSON only.
+
