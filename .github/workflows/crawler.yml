@@ -11,6 +11,8 @@ concurrency:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   crawl:
@@ -34,6 +36,9 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen --no-dev
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
 
       - name: Verify required files
         run: |
@@ -73,3 +78,71 @@ jobs:
           S3_REGION: ${{ secrets.S3_REGION }}
           GITHUB_ACTIONS: true
         run: uv run omnihawk-ai
+
+      - name: Build Pages site artifact
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          touch site/.nojekyll
+          if [ -f output/index.html ]; then
+            cp output/index.html site/index.html
+          else
+            cat > site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>OmniHawk AI · Online Demo</title>
+              <style>
+                :root { color-scheme: light dark; }
+                body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 40px auto; max-width: 920px; padding: 0 16px; }
+                a { color: #2563eb; }
+                .card { border: 1px solid #d0d7de; border-radius: 14px; padding: 20px; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h1>OmniHawk AI</h1>
+                <p>Scheduled crawler finished, but no static report was generated for this run.</p>
+                <p>Please check workflow logs and storage configuration.</p>
+              </div>
+            </body>
+          </html>
+          HTML
+          fi
+          if [ -d output/html ]; then
+            cp -r output/html site/html
+          fi
+          if [ -d output/news ]; then
+            cp -r output/news site/news
+          fi
+          if [ -f output/ai_progress_items.json ]; then
+            cp output/ai_progress_items.json site/ai_progress_items.json
+          fi
+          if [ -f output/ai_progress_seen.json ]; then
+            cp output/ai_progress_seen.json site/ai_progress_seen.json
+          fi
+          if [ -f image.png ]; then
+            cp image.png site/image.png
+          fi
+          if [ -f README.md ]; then
+            cp README.md site/README.md
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy-pages:
+    needs: crawl
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
