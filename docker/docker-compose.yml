@@ -15,43 +15,46 @@
 
     environment:
       - TZ=Asia/Shanghai
-      # Web 鏈嶅姟鍣?      - WEBSERVER_PORT=${WEBSERVER_PORT:-8080}
-      # 閫氱煡娓犻亾
+      # Web server
+      - WEBSERVER_PORT=${WEBSERVER_PORT:-8080}
+      # Notification channels
       - FEISHU_WEBHOOK_URL=${FEISHU_WEBHOOK_URL:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       - DINGTALK_WEBHOOK_URL=${DINGTALK_WEBHOOK_URL:-}
       - WEWORK_WEBHOOK_URL=${WEWORK_WEBHOOK_URL:-}
       - WEWORK_MSG_TYPE=${WEWORK_MSG_TYPE:-}
-      # 閭欢閰嶇疆
+      # Email settings
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
       - EMAIL_TO=${EMAIL_TO:-}
       - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER:-}
       - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-}
-      # ntfy閰嶇疆
+      # ntfy settings
       - NTFY_SERVER_URL=${NTFY_SERVER_URL:-https://ntfy.sh}
       - NTFY_TOPIC=${NTFY_TOPIC:-}
       - NTFY_TOKEN=${NTFY_TOKEN:-}
-      # Bark閰嶇疆
+      # Bark settings
       - BARK_URL=${BARK_URL:-}
-      # Slack閰嶇疆
+      # Slack settings
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
-      # 閫氱敤Webhook閰嶇疆
+      # Generic webhook settings
       - GENERIC_WEBHOOK_URL=${GENERIC_WEBHOOK_URL:-}
       - GENERIC_WEBHOOK_TEMPLATE=${GENERIC_WEBHOOK_TEMPLATE:-}
-      # AI 閰嶇疆锛坅i_analysis 鍜?ai_translation 鍏变韩妯″瀷閰嶇疆锛?      - AI_ANALYSIS_ENABLED=${AI_ANALYSIS_ENABLED:-}
+      # AI settings (shared model config for analysis/translation)
+      - AI_ANALYSIS_ENABLED=${AI_ANALYSIS_ENABLED:-}
       - AI_API_KEY=${AI_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-}
       - AI_API_BASE=${AI_API_BASE:-}
-      # 杩滅▼瀛樺偍閰嶇疆锛圫3 鍏煎鍗忚锛?      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      # Remote storage settings (S3 compatible)
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME:-}
       - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-}
       - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-}
       - S3_REGION=${S3_REGION:-}
-      # 杩愯妯″紡
+      # Runtime mode
       - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
-      - RUN_MODE=${RUN_MODE:-cron}
+      - RUN_MODE=${RUN_MODE:-panel}
       - IMMEDIATE_RUN=${IMMEDIATE_RUN:-true}
   omnihawk-ai-mcp:
     build:

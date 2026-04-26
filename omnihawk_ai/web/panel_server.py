@@ -62,6 +62,20 @@ PROGRESS_SCOPES: Tuple[str, ...] = (
     "policy_safety",
     "oss_signal",
 )
+PROGRESS_SCOPE_ALIAS_MAP: Dict[str, str] = {
+    "progress": "frontier",
+    "finance": "market_finance",
+    "market-finance": "market_finance",
+    "reports": "industry_report",
+    "industry-reports": "industry_report",
+    "industry_reports": "industry_report",
+    "policy": "policy_safety",
+    "policy-safety": "policy_safety",
+    "policy_safety": "policy_safety",
+    "oss": "oss_signal",
+    "oss-dev": "oss_signal",
+    "oss_signal": "oss_signal",
+}
 PROGRESS_SCOPE_KIND_MAP: Dict[str, str] = {
     "frontier": "official_blog,official_site",
     "market_finance": "market_finance",
@@ -79,6 +93,10 @@ PROGRESS_SCOPE_NAME_MAP_ZH: Dict[str, str] = {
 PROGRESS_AUTO_MIN_INTERVAL = 5
 PROGRESS_AUTO_MAX_INTERVAL = 24 * 60
 PROGRESS_AUTO_DEFAULT_INTERVAL = 60
+PROGRESS_FETCH_STALE_TIMEOUT_SECONDS = 20 * 60
+PROGRESS_FETCH_SYNC_ENRICH_LIMIT = 0
+PAPER_LIST_SYNC_ENRICH_LIMIT = 0
+PAPER_FETCH_STALE_TIMEOUT_SECONDS = 3 * 60 * 60
 NOTIFY_CHANNELS: Tuple[str, ...] = (
     "feishu",
     "wework",
@@ -447,6 +465,7 @@ def normalize_panel_filters(filters: Dict[str, Any]) -> Dict[str, Any]:
 
 def normalize_progress_scope(value: Any, default: str = "frontier") -> str:
     text = str(value or "").strip().lower()
+    text = PROGRESS_SCOPE_ALIAS_MAP.get(text, text)
     return text if text in PROGRESS_SCOPES else default
 
 
@@ -1177,6 +1196,7 @@ class ProgressPageSettingsStore:
         return {
             "scope": scope,
             "max_per_source": 20,
+            "fetch_workers": 6,
             "source_ids": [],
             "notify_channel": NOTIFY_CHANNEL_DEFAULT,
             "notify_limit": 8,
@@ -1216,6 +1236,7 @@ class ProgressPageSettingsStore:
         base = self._default_scope_settings(scope)
         incoming = payload if isinstance(payload, dict) else {}
         base["max_per_source"] = parse_int_value(incoming.get("max_per_source"), 1, 120) or 20
+        base["fetch_workers"] = parse_int_value(incoming.get("fetch_workers"), 1, 16) or 6
         source_ids_raw = incoming.get("source_ids")
         source_ids: List[str] = []
         if isinstance(source_ids_raw, list):
@@ -1634,6 +1655,7 @@ class ProgressFetchTaskManager:
             "started_at": "",
             "finished_at": "",
             "max_per_source": 20,
+            "fetch_workers": 6,
             "source_ids": [],
             "error": "",
             "result": {},
@@ -1669,21 +1691,65 @@ class ProgressFetchTaskManager:
         }
         self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def _is_running_stale(self, job: Dict[str, Any]) -> bool:
+        if not bool(job.get("running")):
+            return False
+        started_at = parse_iso_utc(job.get("started_at")) or parse_iso_utc(job.get("requested_at"))
+        if started_at is None:
+            return False
+        elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
+        return elapsed >= PROGRESS_FETCH_STALE_TIMEOUT_SECONDS
+
+    def _finalize_stale_job(self, scope: str, job: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(job or {})
+        message = (
+            f"fetch task timeout after {PROGRESS_FETCH_STALE_TIMEOUT_SECONDS // 60} minutes; "
+            "marked as stale and released"
+        )
+        normalized["scope"] = normalize_progress_scope(scope, default="frontier")
+        normalized["running"] = False
+        normalized["finished_at"] = utc_now_iso()
+        normalized["error"] = message
+        result_payload = normalized.get("result") if isinstance(normalized.get("result"), dict) else {}
+        if not result_payload:
+            result_payload = {"ok": False, "error": message}
+        else:
+            result_payload = dict(result_payload)
+            result_payload.setdefault("ok", False)
+            result_payload.setdefault("error", message)
+        normalized["result"] = result_payload
+        self._jobs[normalized["scope"]] = normalized
+        return normalized
+
     def get(self, scope: str) -> Dict[str, Any]:
         key = normalize_progress_scope(scope, default="frontier")
         with self._lock:
-            row = self._jobs.get(key) or self._default_job(key)
+            row = dict(self._jobs.get(key) or self._default_job(key))
+            if self._is_running_stale(row):
+                row = self._finalize_stale_job(key, row)
+                self._save()
             return dict(row)
 
     def list_all(self) -> Dict[str, Dict[str, Any]]:
         with self._lock:
-            return {scope: dict(self._jobs.get(scope) or self._default_job(scope)) for scope in PROGRESS_SCOPES}
+            changed = False
+            result: Dict[str, Dict[str, Any]] = {}
+            for scope in PROGRESS_SCOPES:
+                row = dict(self._jobs.get(scope) or self._default_job(scope))
+                if self._is_running_stale(row):
+                    row = self._finalize_stale_job(scope, row)
+                    changed = True
+                result[scope] = dict(row)
+            if changed:
+                self._save()
+            return result
 
     def start(
         self,
         *,
         scope: str,
         max_per_source: int,
+        fetch_workers: int,
         source_ids: List[str],
         requested_by: str,
         runner: Any,
@@ -1691,6 +1757,8 @@ class ProgressFetchTaskManager:
         key = normalize_progress_scope(scope, default="frontier")
         with self._lock:
             current = dict(self._jobs.get(key) or self._default_job(key))
+            if self._is_running_stale(current):
+                current = self._finalize_stale_job(key, current)
             if bool(current.get("running")):
                 return {"ok": False, "error": "fetch task is already running", "job": current}
             now = utc_now_iso()
@@ -1704,6 +1772,7 @@ class ProgressFetchTaskManager:
                 "started_at": now,
                 "finished_at": "",
                 "max_per_source": max(1, min(int(max_per_source or 20), 120)),
+                "fetch_workers": max(1, min(int(fetch_workers or 6), 16)),
                 "source_ids": [str(x).strip() for x in (source_ids or []) if str(x).strip()],
                 "error": "",
                 "result": {},
@@ -1733,6 +1802,199 @@ class ProgressFetchTaskManager:
                 row["error"] = error_text
                 row["result"] = result_payload
                 self._jobs[key] = row
+                self._save()
+
+        worker = threading.Thread(target=_run, daemon=True)
+        worker.start()
+        return {"ok": True, "job": dict(started)}
+
+
+class PaperFetchTaskManager:
+    """Background crawl task state for paper radar with persistence."""
+
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self.path = output_dir / "paper_fetch_task.json"
+        self._lock = threading.RLock()
+        self._job: Dict[str, Any] = self._default_job()
+        self._load()
+
+    def _default_job(self) -> Dict[str, Any]:
+        return {
+            "running": False,
+            "job_id": "",
+            "requested_at": "",
+            "requested_by": "",
+            "started_at": "",
+            "finished_at": "",
+            "analysis_language": "Chinese",
+            "error": "",
+            "result": {},
+        }
+
+    def _load(self) -> None:
+        with self._lock:
+            self._job = self._default_job()
+            if not self.path.exists():
+                return
+            try:
+                raw = json.loads(self.path.read_text(encoding="utf-8"))
+            except Exception:
+                return
+            row = raw.get("job") if isinstance(raw, dict) else {}
+            if not isinstance(row, dict):
+                return
+            merged = self._default_job()
+            merged.update(row)
+            merged["running"] = bool(row.get("running", False))
+            self._job = merged
+
+    def _save(self) -> None:
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        payload = {"job": self._job, "updated_at": utc_now_iso()}
+        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _is_running_stale(self, row: Dict[str, Any]) -> bool:
+        if not bool(row.get("running")):
+            return False
+        started_at = parse_iso_utc(row.get("started_at")) or parse_iso_utc(row.get("requested_at"))
+        if started_at is None:
+            return False
+        elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
+        return elapsed >= PAPER_FETCH_STALE_TIMEOUT_SECONDS
+
+    def _finalize_stale(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(row or {})
+        message = (
+            f"paper crawl timeout after {PAPER_FETCH_STALE_TIMEOUT_SECONDS // 60} minutes; "
+            "marked as stale and released"
+        )
+        normalized["running"] = False
+        normalized["finished_at"] = utc_now_iso()
+        normalized["error"] = message
+        result = normalized.get("result") if isinstance(normalized.get("result"), dict) else {}
+        if not result:
+            result = {"ok": False, "error": message}
+        else:
+            result = dict(result)
+            result.setdefault("ok", False)
+            result.setdefault("error", message)
+        normalized["result"] = result
+        return normalized
+
+    def _sync_with_runtime_locked(self, runtime: Dict[str, Any]) -> Dict[str, Any]:
+        row = dict(self._job or self._default_job())
+        changed = False
+        runtime_running = bool(runtime.get("running"))
+        runtime_started = str(runtime.get("started_at", "") or "").strip()
+        runtime_finished = str(runtime.get("finished_at", "") or "").strip()
+        runtime_error = str(runtime.get("last_error", "") or "").strip()
+        runtime_exit = runtime.get("last_exit_code")
+
+        if runtime_running and not bool(row.get("running")):
+            now = utc_now_iso()
+            row["running"] = True
+            row["job_id"] = str(row.get("job_id", "") or "").strip() or uuid.uuid4().hex[:12]
+            row["requested_at"] = str(row.get("requested_at", "") or "").strip() or runtime_started or now
+            row["requested_by"] = str(row.get("requested_by", "") or "").strip() or "runtime"
+            row["started_at"] = runtime_started or str(row.get("started_at", "") or "").strip() or now
+            row["finished_at"] = ""
+            row["error"] = ""
+            changed = True
+
+        if (not runtime_running) and bool(row.get("running")):
+            row["running"] = False
+            row["finished_at"] = runtime_finished or utc_now_iso()
+            if runtime_error:
+                row["error"] = runtime_error
+            ok = (runtime_exit == 0) and not runtime_error
+            row["result"] = {
+                "ok": ok,
+                "exit_code": runtime_exit,
+                "error": runtime_error,
+                "started_at": runtime_started or str(row.get("started_at", "") or "").strip(),
+                "finished_at": row["finished_at"],
+            }
+            changed = True
+
+        if self._is_running_stale(row):
+            row = self._finalize_stale(row)
+            changed = True
+
+        if changed:
+            self._job = row
+            self._save()
+        return dict(row)
+
+    def sync_with_runtime(self, runtime: Dict[str, Any]) -> Dict[str, Any]:
+        with self._lock:
+            return self._sync_with_runtime_locked(runtime if isinstance(runtime, dict) else {})
+
+    def get(self) -> Dict[str, Any]:
+        with self._lock:
+            row = dict(self._job or self._default_job())
+            if self._is_running_stale(row):
+                row = self._finalize_stale(row)
+                self._job = row
+                self._save()
+            return dict(row)
+
+    def start(
+        self,
+        *,
+        analysis_language: str,
+        requested_by: str,
+        runner: Any,
+    ) -> Dict[str, Any]:
+        lang = normalize_analysis_language(analysis_language, default="Chinese")
+        with self._lock:
+            row = dict(self._job or self._default_job())
+            if self._is_running_stale(row):
+                row = self._finalize_stale(row)
+                self._job = row
+                self._save()
+            if bool(row.get("running")):
+                return {"ok": False, "error": "paper crawl is already running", "job": row}
+
+            now = utc_now_iso()
+            job_id = uuid.uuid4().hex[:12]
+            started = {
+                "running": True,
+                "job_id": job_id,
+                "requested_at": now,
+                "requested_by": str(requested_by or "manual").strip() or "manual",
+                "started_at": now,
+                "finished_at": "",
+                "analysis_language": lang,
+                "error": "",
+                "result": {},
+            }
+            self._job = started
+            self._save()
+
+        def _run() -> None:
+            error_text = ""
+            result_payload: Dict[str, Any] = {}
+            try:
+                result = runner()
+                if isinstance(result, dict):
+                    result_payload = dict(result)
+                else:
+                    result_payload = {"ok": True, "message": str(result)}
+            except Exception as exc:
+                error_text = f"{type(exc).__name__}: {exc}"
+                result_payload = {"ok": False, "error": error_text}
+
+            with self._lock:
+                row = dict(self._job or self._default_job())
+                if str(row.get("job_id", "")) != job_id:
+                    return
+                row["running"] = False
+                row["finished_at"] = utc_now_iso()
+                if error_text:
+                    row["error"] = error_text
+                row["result"] = result_payload
+                self._job = row
                 self._save()
 
         worker = threading.Thread(target=_run, daemon=True)
@@ -1792,6 +2054,7 @@ class ProgressAutoScheduler:
                     continue
 
                 max_per_source = parse_int_value(cfg.get("max_per_source"), 1, 120) or 20
+                fetch_workers = parse_int_value(cfg.get("fetch_workers"), 1, 16) or 6
                 source_ids = cfg.get("source_ids") if isinstance(cfg.get("source_ids"), list) else []
                 source_ids = [str(x).strip() for x in source_ids if str(x).strip()]
                 auto_push = bool(parse_bool_text(cfg.get("auto_push_enabled"), False))
@@ -1799,11 +2062,13 @@ class ProgressAutoScheduler:
                 started = self.task_manager.start(
                     scope=scope,
                     max_per_source=max_per_source,
+                    fetch_workers=fetch_workers,
                     source_ids=source_ids,
                     requested_by="auto",
-                    runner=lambda s=scope, m=max_per_source, ids=list(source_ids), ap=auto_push: self.trigger_once(
+                    runner=lambda s=scope, m=max_per_source, fw=fetch_workers, ids=list(source_ids), ap=auto_push: self.trigger_once(
                         scope=s,
                         max_per_source=m,
+                        fetch_workers=fw,
                         source_ids=ids,
                         auto_push=ap,
                         requested_by="auto",
@@ -4199,6 +4464,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     progress_page_settings: ProgressPageSettingsStore = None  # type: ignore
     progress_subscriptions: ProgressSubscriptionStore = None  # type: ignore
     progress_tasks: ProgressFetchTaskManager = None  # type: ignore
+    paper_tasks: PaperFetchTaskManager = None  # type: ignore
     progress_auto_scheduler: ProgressAutoScheduler = None  # type: ignore
     paper_enrich_retry_after: Dict[str, float] = {}
     paper_enrich_retry_lock = threading.RLock()
@@ -4561,6 +4827,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         *,
         scope: str,
         max_per_source: int,
+        fetch_workers: int,
         source_ids: List[str],
         auto_push: bool = False,
         requested_by: str = "manual",
@@ -4570,6 +4837,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         result = self.progress.fetch(
             max_per_source=max_per_source,
             source_ids=effective_source_ids,
+            worker_count=fetch_workers,
         )
         changed_keys: List[str] = []
         for key in result.get("added_keys", []) + result.get("updated_keys", []):
@@ -4582,13 +4850,34 @@ class DashboardHandler(BaseHTTPRequestHandler):
             default="Chinese",
         )
         if changed_keys:
-            result["enrichment"] = self._translate_progress_items(
-                keys=changed_keys,
-                output_language=output_language,
-                force=False,
-                max_workers=2,
-                allow_skip_unconfigured=True,
-            )
+            sync_limit = max(0, int(PROGRESS_FETCH_SYNC_ENRICH_LIMIT or 0))
+            sync_keys = changed_keys[:sync_limit] if sync_limit > 0 else []
+            if sync_keys:
+                result["enrichment"] = self._translate_progress_items(
+                    keys=sync_keys,
+                    output_language=output_language,
+                    force=False,
+                    max_workers=4,
+                    allow_skip_unconfigured=True,
+                )
+            else:
+                result["enrichment"] = {
+                    "ok": True,
+                    "requested": 0,
+                    "translated": 0,
+                    "changed": 0,
+                    "translated_keys": [],
+                    "failed": [],
+                    "skipped": True,
+                    "reason": "sync enrichment disabled for faster fetch",
+                    "output_language": output_language,
+                }
+            if len(changed_keys) > len(sync_keys):
+                result["enrichment_deferred"] = {
+                    "deferred_count": len(changed_keys) - len(sync_keys),
+                    "sync_limit": sync_limit,
+                    "message": "remaining items will be lazily enriched by page-side on-demand translation",
+                }
             result["realtime_push"] = self._run_progress_subscriptions(
                 scope_key,
                 trigger_mode="realtime",
@@ -4598,6 +4887,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             result["auto_push"] = self._run_progress_subscriptions(scope_key, trigger_mode="scheduled")
         result["scope"] = scope_key
         result["kind"] = self._progress_kind_for_scope(scope_key)
+        result["fetch_workers"] = max(1, min(int(fetch_workers or 1), 16))
         requested = str(requested_by or "manual").strip() or "manual"
         result["requested_by"] = requested
         ok = bool(result.get("ok", True))
@@ -4719,6 +5009,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             parts = re.split(r"[,\n;/|]", value)
             return [str(v).strip() for v in parts if str(v).strip()]
         return []
+
+    def _paper_i18n_map(self, insight: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        if self.papers and hasattr(self.papers, "_paper_i18n_map"):
+            try:
+                mapped = self.papers._paper_i18n_map(insight)  # type: ignore[attr-defined]
+            except Exception:
+                mapped = {}
+            if isinstance(mapped, dict):
+                return mapped
+        return {}
+
+    def _paper_deep_i18n_entry(self, insight: Dict[str, Any], output_language: str) -> Dict[str, Any]:
+        if self.papers and hasattr(self.papers, "_paper_deep_i18n_entry"):
+            try:
+                entry = self.papers._paper_deep_i18n_entry(insight, output_language)  # type: ignore[attr-defined]
+            except Exception:
+                entry = {}
+            if isinstance(entry, dict):
+                return entry
+        return {}
 
     def _build_paper_llm_client_config(self, settings: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         ai_model = str(settings.get("ai_model", "") or "").strip()
@@ -5400,7 +5710,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "API_BASE": ai_api_base,
             "TEMPERATURE": 0.1,
             "MAX_TOKENS": 1400,
-            "TIMEOUT": 80,
+            "TIMEOUT": 35,
         }
 
     def _progress_i18n_entry(self, row: Dict[str, Any], target_language: str) -> Dict[str, Any]:
@@ -5961,6 +6271,44 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "total": len(results),
         }
 
+    def _run_paper_fetch_task(
+        self,
+        *,
+        analysis_language: str,
+        requested_by: str = "manual",
+    ) -> Dict[str, Any]:
+        lang = normalize_analysis_language(analysis_language, default="Chinese")
+        ok, message = self.runner.trigger(analysis_language=lang)
+        if not ok:
+            return {
+                "ok": False,
+                "error": str(message or "failed to start crawl"),
+                "analysis_language": lang,
+                "requested_by": str(requested_by or "manual").strip() or "manual",
+            }
+
+        # Wait for crawl process completion so persisted task state can reflect final result.
+        while True:
+            status = self.runner.status()
+            if not bool(status.get("running")):
+                break
+            time.sleep(1.0)
+
+        status = self.runner.status()
+        exit_code = status.get("last_exit_code")
+        error_text = str(status.get("last_error", "") or "").strip()
+        task_ok = (exit_code == 0) and not error_text
+        return {
+            "ok": task_ok,
+            "analysis_language": lang,
+            "requested_by": str(requested_by or "manual").strip() or "manual",
+            "started_at": str(status.get("started_at", "") or "").strip(),
+            "finished_at": str(status.get("finished_at", "") or "").strip(),
+            "exit_code": exit_code,
+            "error": error_text,
+            "message": "crawl finished" if task_ok else (error_text or f"crawl exited with code {exit_code}"),
+        }
+
     def _send_test_webhook(
         self,
         channel: str,
@@ -6278,6 +6626,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if path == "/api/status":
             runtime = self.runner.status()
+            paper_job = (
+                self.paper_tasks.sync_with_runtime(runtime)
+                if self.paper_tasks
+                else {}
+            )
             schedule = self.schedule.current()
             settings = self.settings.load()
             payload = {
@@ -6288,8 +6641,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "paper_subtopics": settings.get("paper_subtopics", ""),
                 "paper_max_papers_per_run": settings.get("paper_max_papers_per_run"),
                 "ai_model": settings.get("ai_model", ""),
+                "paper_job": paper_job,
                 "server_time": utc_now_iso(),
             }
+            if bool((paper_job or {}).get("running")):
+                payload["running"] = True
             self._send_json(payload)
             return
 
@@ -6325,7 +6681,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/progress/sources":
-            self._send_json({"items": self.progress.list_sources(), "count": len(self.progress.list_sources())})
+            params = parse_qs(parsed.query)
+            scope_raw = str((params.get("scope") or [""])[0] or "").strip()
+            scope = normalize_progress_scope(scope_raw, default="")
+            all_sources = self.progress.list_sources()
+            if scope:
+                allowed_kinds = {
+                    x.strip().lower()
+                    for x in self._progress_kind_for_scope(scope).split(",")
+                    if x.strip()
+                }
+                items = [
+                    row
+                    for row in all_sources
+                    if str(row.get("kind", "") or "").strip().lower() in allowed_kinds
+                ]
+            else:
+                items = all_sources
+            self._send_json({"items": items, "count": len(items), "scope": scope or "all"})
             return
 
         if path == "/api/progress/fetch/status":
@@ -6385,7 +6758,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 papers = []
             paper_keys = [str(row.get("paper_key", "") or "").strip() for row in papers if isinstance(row, dict)]
             paper_keys = [key for key in paper_keys if key]
-            enrich_keys = paper_keys[:20]
+            sync_limit = max(0, int(PAPER_LIST_SYNC_ENRICH_LIMIT or 0))
+            enrich_keys = paper_keys[:sync_limit] if sync_limit > 0 else []
             enrichment: Dict[str, Any] = {
                 "ok": True,
                 "requested": len(enrich_keys),
@@ -6393,7 +6767,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "changed": 0,
                 "translated_keys": [],
                 "failed": [],
-                "skipped": 0,
+                "skipped": True,
+                "reason": "sync paper enrichment disabled for faster list loading",
             }
             if enrich_keys:
                 try:
@@ -6417,6 +6792,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     row.pop("_db_path", None)
             if isinstance(data, dict):
                 data["enrichment"] = enrichment
+                if len(paper_keys) > len(enrich_keys):
+                    data["enrichment_deferred"] = {
+                        "deferred_count": len(paper_keys) - len(enrich_keys),
+                        "sync_limit": sync_limit,
+                        "message": "remaining items will be lazily enriched by page-side translation",
+                    }
             self._send_json(data)
             return
 
@@ -6590,7 +6971,51 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if requested_lang_raw
                 else ""
             )
-            ok, message = self.runner.trigger(analysis_language=requested_lang)
+            default_lang = normalize_analysis_language(
+                self.settings.load().get("analysis_language", "Chinese"),
+                default="Chinese",
+            )
+            effective_lang = requested_lang or default_lang
+            runtime = self.runner.status()
+            paper_job = (
+                self.paper_tasks.sync_with_runtime(runtime)
+                if self.paper_tasks
+                else {}
+            )
+            if bool(runtime.get("running")) or bool((paper_job or {}).get("running")):
+                self._send_json(
+                    {
+                        "ok": False,
+                        "error": "crawl is already running",
+                        "job": paper_job,
+                    },
+                    status=409,
+                )
+                return
+
+            if self.paper_tasks:
+                started = self.paper_tasks.start(
+                    analysis_language=effective_lang,
+                    requested_by="manual",
+                    runner=lambda lang=effective_lang: self._run_paper_fetch_task(
+                        analysis_language=lang,
+                        requested_by="manual",
+                    ),
+                )
+                if started.get("ok"):
+                    self._send_json(
+                        {
+                            "ok": True,
+                            "message": "crawl started",
+                            "started": True,
+                            "job": started.get("job", {}),
+                        }
+                    )
+                else:
+                    self._send_json(started, status=409)
+                return
+
+            ok, message = self.runner.trigger(analysis_language=effective_lang)
             if ok:
                 self._send_json({"ok": True, "message": message})
             else:
@@ -6677,12 +7102,43 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json(result, status=400)
             return
 
+        if path == "/api/papers/translate":
+            data = self._read_json()
+            keys_raw = data.get("keys")
+            if isinstance(keys_raw, list):
+                keys = [str(x or "").strip() for x in keys_raw if str(x or "").strip()]
+            else:
+                key_text = str(data.get("paper_key", "") or "").strip()
+                keys = [key_text] if key_text else []
+            if not keys:
+                self._send_json({"ok": False, "error": "keys is required"}, status=400)
+                return
+            output_language_raw = str(data.get("output_language", "") or "").strip()
+            output_language = normalize_analysis_language(output_language_raw, default="Chinese")
+            force = bool(parse_bool_text(data.get("force"), False))
+            max_workers = parse_int_value(data.get("max_workers"), 1, 4) or 2
+            result = self._translate_paper_items(
+                keys=keys,
+                output_language=output_language,
+                force=force,
+                include_deep=False,
+                max_workers=max_workers,
+                allow_skip_unconfigured=True,
+            )
+            if result.get("ok"):
+                self._send_json(result)
+            else:
+                self._send_json(result, status=400)
+            return
+
         if path == "/api/progress/settings":
             data = self._read_json()
             scope = normalize_progress_scope(data.get("scope", "frontier"), default="frontier")
             updates: Dict[str, Any] = {}
             if "max_per_source" in data:
                 updates["max_per_source"] = parse_int_value(data.get("max_per_source"), 1, 120)
+            if "fetch_workers" in data:
+                updates["fetch_workers"] = parse_int_value(data.get("fetch_workers"), 1, 16)
             if "source_ids" in data:
                 updates["source_ids"] = data.get("source_ids") if isinstance(data.get("source_ids"), list) else []
             if "notify_channel" in data:
@@ -6751,6 +7207,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 or parse_int_value(scope_cfg.get("max_per_source"), 1, 120)
                 or 20
             )
+            fetch_workers = (
+                parse_int_value(data.get("fetch_workers"), 1, 16)
+                or parse_int_value(scope_cfg.get("fetch_workers"), 1, 16)
+                or 6
+            )
             source_ids_raw = data.get("source_ids")
             if isinstance(source_ids_raw, list):
                 source_ids = [str(x).strip() for x in source_ids_raw if str(x).strip()]
@@ -6764,6 +7225,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 result = self._run_progress_fetch_task(
                     scope=scope,
                     max_per_source=max_per_source,
+                    fetch_workers=fetch_workers,
                     source_ids=source_ids,
                     auto_push=auto_push,
                     requested_by="manual",
@@ -6774,11 +7236,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             started = self.progress_tasks.start(
                 scope=scope,
                 max_per_source=max_per_source,
+                fetch_workers=fetch_workers,
                 source_ids=source_ids,
                 requested_by="manual",
-                runner=lambda s=scope, m=max_per_source, ids=list(source_ids), ap=auto_push: self._run_progress_fetch_task(
+                runner=lambda s=scope, m=max_per_source, fw=fetch_workers, ids=list(source_ids), ap=auto_push: self._run_progress_fetch_task(
                     scope=s,
                     max_per_source=m,
+                    fetch_workers=fw,
                     source_ids=ids,
                     auto_push=ap,
                     requested_by="manual",
@@ -7086,12 +7550,14 @@ def run_server(port: int, output_dir: Path) -> None:
     progress_subscription_store = ProgressSubscriptionStore(output_dir)
     progress_repo = AIProgressRepository(output_dir)
     progress_task_manager = ProgressFetchTaskManager(output_dir)
+    paper_task_manager = PaperFetchTaskManager(output_dir)
     DashboardHandler.settings = settings_store
     DashboardHandler.actions = action_store
     DashboardHandler.subscriptions = subscription_store
     DashboardHandler.progress_page_settings = progress_page_settings
     DashboardHandler.progress_subscriptions = progress_subscription_store
     DashboardHandler.progress_tasks = progress_task_manager
+    DashboardHandler.paper_tasks = paper_task_manager
     DashboardHandler.progress = progress_repo
     DashboardHandler.runner = CrawlRunner(PROJECT_ROOT, settings_store=settings_store)
     DashboardHandler.schedule = ScheduleController(

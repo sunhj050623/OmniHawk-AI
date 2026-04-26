@@ -12,6 +12,12 @@ case "${RUN_MODE:-cron}" in
     echo "RUN_MODE=once: starting one-shot crawl"
     exec omnihawk-ai
     ;;
+"panel")
+    PANEL_PORT="${WEBSERVER_PORT:-8080}"
+    PANEL_OUTPUT_DIR="${PANEL_OUTPUT_DIR:-/app/output}"
+    echo "RUN_MODE=panel: starting OmniHawk AI panel server on port ${PANEL_PORT}"
+    exec python -m omnihawk_ai.web.panel_server --port "${PANEL_PORT}" --output-dir "${PANEL_OUTPUT_DIR}"
+    ;;
 "cron")
     # Validate cron expression with a conservative character whitelist.
     CRON_EXPR="${CRON_SCHEDULE:-*/30 * * * *}"

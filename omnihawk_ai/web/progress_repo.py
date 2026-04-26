@@ -3226,22 +3226,31 @@ class AIProgressRepository:
         )
         return ranked[:safe_max]
 
-    def _fetch_text(self, url: str) -> str:
+    def _fetch_text(
+        self,
+        url: str,
+        *,
+        timeout: int = 8,
+        max_attempts: int = 2,
+        backoff_seconds: float = 0.4,
+    ) -> str:
         last_error: Optional[Exception] = None
-        for attempt in range(3):
+        safe_attempts = max(1, min(int(max_attempts or 1), 5))
+        safe_timeout = max(3, min(int(timeout or 12), 30))
+        for attempt in range(safe_attempts):
             try:
                 request = urllib.request.Request(
                     url,
                     headers={"User-Agent": "PaperScope-AIProgress/1.0 (+https://github.com)"},
                     method="GET",
                 )
-                with urllib.request.urlopen(request, timeout=12) as response:
+                with urllib.request.urlopen(request, timeout=safe_timeout) as response:
                     raw = response.read()
                 return raw.decode("utf-8", errors="replace")
             except Exception as exc:
                 last_error = exc
-                if attempt < 2:
-                    time.sleep(0.6 * (attempt + 1))
+                if attempt < safe_attempts - 1:
+                    time.sleep(max(0.0, float(backoff_seconds or 0.0)) * (attempt + 1))
                     continue
         if last_error is not None:
             raise last_error
@@ -3369,25 +3378,26 @@ class AIProgressRepository:
 
     def _fetch_sitemap_urls(self, sitemap_url: str) -> List[Tuple[str, str]]:
         ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-        xml_text = self._fetch_text(sitemap_url)
+        xml_text = self._fetch_text(sitemap_url, timeout=10, max_attempts=2, backoff_seconds=0.3)
         root = ET.fromstring(xml_text)
         if _local_name(root.tag) == "sitemapindex":
             entries: List[Tuple[str, str]] = []
-            for loc in root.findall(".//sm:loc", ns):
+            for loc in root.findall(".//sm:loc", ns)[:16]:
                 nested = str(loc.text or "").strip()
                 if not nested:
                     continue
                 try:
-                    nested_xml = self._fetch_text(nested)
+                    nested_xml = self._fetch_text(nested, timeout=8, max_attempts=1, backoff_seconds=0.0)
                     nested_root = ET.fromstring(nested_xml)
                 except Exception:
                     continue
-                entries.extend(self._parse_sitemap_entries(nested_root, ns))
+                entries.extend(self._parse_sitemap_entries(nested_root, ns)[:300])
             return entries
         return self._parse_sitemap_entries(root, ns)
 
     def _extract_page_metadata(self, url: str) -> Tuple[str, str]:
-        text = self._fetch_text(url)
+        # Fast-path: this function is called in batch loops, so fail fast on slow pages.
+        text = self._fetch_text(url, timeout=4, max_attempts=1, backoff_seconds=0.0)
         title_patterns = [
             r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
             r'<title[^>]*>(.*?)</title>',
@@ -3425,34 +3435,49 @@ class AIProgressRepository:
             if path_prefixes and not any(prefix in url for prefix in path_prefixes):
                 continue
             filtered_urls.append((url, lastmod))
+        # Prefer newer sitemap entries first; most feeds provide sortable timestamps.
+        filtered_urls.sort(key=lambda x: str(x[1] or ""), reverse=True)
         rows: List[Dict[str, Any]] = []
-        scan_limit = max(max_items * 12, 120)
-        for url, lastmod in filtered_urls[:scan_limit]:
+        try:
+            configured_scan_limit = int(source.get("scan_limit", 60) or 60)
+        except Exception:
+            configured_scan_limit = 60
+        scan_limit = max(max_items * 2, configured_scan_limit)
+        candidates = filtered_urls[:scan_limit]
+
+        def build_row(url: str, lastmod: str) -> Optional[Dict[str, Any]]:
             try:
                 title, summary = self._extract_page_metadata(url)
             except Exception:
-                continue
+                return None
             if not title:
-                continue
+                return None
             published_at = _parse_dt_iso(lastmod) or _infer_date_from_url(url)
-            rows.append(
-                self._normalize_item(
-                    {
-                        "source_id": source.get("id", ""),
-                        "source_name": source.get("name", ""),
-                        "org": source.get("org", ""),
-                        "region": source.get("region", "global"),
-                        "kind": source.get("kind", "official_site"),
-                        "event_type": _infer_event_type(title, summary, str(source.get("kind", ""))),
-                        "title": title,
-                        "summary": summary,
-                        "url": url,
-                        "published_at": published_at,
-                        "tags": [],
-                        "fetched_at": _utc_now_iso(),
-                    }
-                )
+            return self._normalize_item(
+                {
+                    "source_id": source.get("id", ""),
+                    "source_name": source.get("name", ""),
+                    "org": source.get("org", ""),
+                    "region": source.get("region", "global"),
+                    "kind": source.get("kind", "official_site"),
+                    "event_type": _infer_event_type(title, summary, str(source.get("kind", ""))),
+                    "title": title,
+                    "summary": summary,
+                    "url": url,
+                    "published_at": published_at,
+                    "tags": [],
+                    "fetched_at": _utc_now_iso(),
+                }
             )
+
+        if candidates:
+            worker_count = min(4, max(2, len(candidates)))
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = [executor.submit(build_row, url, lastmod) for url, lastmod in candidates]
+                for future in as_completed(futures):
+                    row = future.result()
+                    if row:
+                        rows.append(row)
         return self._select_items_for_source(rows, source, max_items)
 
     def _parse_github_trending_feed(self, source: Dict[str, Any], max_items: int) -> List[Dict[str, Any]]:
@@ -3697,6 +3722,7 @@ class AIProgressRepository:
         self,
         max_per_source: int = 20,
         source_ids: Optional[List[str]] = None,
+        worker_count: Optional[int] = None,
     ) -> Dict[str, Any]:
         per_source = max(1, min(int(max_per_source or 20), 120))
         target_ids = {str(x).strip() for x in (source_ids or []) if str(x).strip()}
@@ -3736,8 +3762,12 @@ class AIProgressRepository:
             except Exception as exc:
                 return source_id, [], f"{type(exc).__name__}: {exc}"
 
-        worker_count = min(6, max(2, len(targets)))
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        default_workers = min(8, max(3, len(targets)))
+        if worker_count is None:
+            fetch_workers = default_workers
+        else:
+            fetch_workers = max(1, min(int(worker_count or 1), 16))
+        with ThreadPoolExecutor(max_workers=fetch_workers) as executor:
             futures = [executor.submit(fetch_one, source) for source in targets]
             for future in as_completed(futures):
                 source_id, rows, error = future.result()
@@ -3801,6 +3831,7 @@ class AIProgressRepository:
         return {
             "ok": True,
             "max_per_source": per_source,
+            "worker_count": fetch_workers,
             "source_count": len(targets),
             "source_item_counts": source_counts,
             "scanned": scanned,

@@ -2735,6 +2735,9 @@ def build_panel_html_v2() -> str:
       historyMode: "all",
       appliedQuery: null,
       deepRunningKeys: Object.create(null),
+      paperTranslatingKeys: Object.create(null),
+      paperTranslationRunning: false,
+      statusPollTimer: null,
       lang: localStorage.getItem("panel_lang") || "zh-CN",
       theme: localStorage.getItem("panel_theme") || "dark",
       aiKeyVisible: false,
@@ -2972,13 +2975,34 @@ def build_panel_html_v2() -> str:
       return data;
     }
 
+    function stopStatusPolling() {
+      if (!state.statusPollTimer) return;
+      window.clearInterval(state.statusPollTimer);
+      state.statusPollTimer = null;
+    }
+
+    function startStatusPolling() {
+      if (state.statusPollTimer) return;
+      state.statusPollTimer = window.setInterval(async () => {
+        try {
+          await refreshStatus();
+          if (!state.status?.running) stopStatusPolling();
+        } catch (_) {
+          // Ignore transient polling errors; next round retries.
+        }
+      }, 4000);
+    }
+
     function renderStatus() {
       const s = state.status || {};
       if (s.interval_minutes) {
         const interval = document.getElementById("interval");
         if (interval) interval.value = String(s.interval_minutes);
       }
-      setRunButtonState(!!s.running);
+      const running = !!(s.running || s.paper_job?.running);
+      setRunButtonState(running);
+      if (running) startStatusPolling();
+      else stopStatusPolling();
     }
 
     function renderFavoriteSummary() {
@@ -3313,7 +3337,45 @@ def build_panel_html_v2() -> str:
       renderStatus();
     }
 
-    async function refreshPapers() {
+    async function triggerPaperTranslation() {
+      if (state.paperTranslationRunning) return;
+      const outputLanguage = currentOutputLanguage();
+      const keys = [];
+      for (const row of state.papers || []) {
+        if (!row || typeof row !== "object") continue;
+        const key = String(row.paper_key || "").trim();
+        if (!key || state.paperTranslatingKeys[key]) continue;
+        state.paperTranslatingKeys[key] = true;
+        keys.push(key);
+        if (keys.length >= 12) break;
+      }
+      if (!keys.length) return;
+      state.paperTranslationRunning = true;
+      try {
+        const data = await fetchJSON("/api/papers/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            keys,
+            output_language: outputLanguage,
+            force: false,
+            max_workers: 2
+          })
+        });
+        if (Number(data.changed || 0) > 0) {
+          await refreshPapers({ skipTranslation: true });
+        }
+      } catch (_) {
+        // Ignore translation failures here; original content remains available.
+      } finally {
+        state.paperTranslationRunning = false;
+        for (const key of keys) {
+          delete state.paperTranslatingKeys[key];
+        }
+      }
+    }
+
+    async function refreshPapers(options = {}) {
       if (!state.appliedQuery) state.appliedQuery = captureQueryFromInputs();
       const params = buildPaperQueryParams(state.appliedQuery);
       try {
@@ -3325,6 +3387,9 @@ def build_panel_html_v2() -> str:
       if (state.status) state.status.db_path = data.db_path || state.status.db_path;
       renderFavoriteSummary();
       renderCards();
+      if (!options.skipTranslation) {
+        triggerPaperTranslation().catch(() => {});
+      }
     }
 
     async function runNow() {
@@ -3568,6 +3633,7 @@ def build_panel_html_v2() -> str:
     });
     document.getElementById("viewMode").addEventListener("change", async () => { await applyFiltersAndRefresh(false); });
     document.getElementById("sortMode").addEventListener("change", async () => { await applyFiltersAndRefresh(false); });
+    window.addEventListener("beforeunload", () => stopStatusPolling());
 
     initPageShellMotion();
 
@@ -5137,6 +5203,27 @@ def build_progress_html() -> str:
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
+      align-items: start;
+    }
+    .cfg-grid label {
+      display: grid;
+      grid-template-columns: 136px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+    .cfg-grid label > span {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cfg-grid label > input,
+    .cfg-grid label > select {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .cfg-grid .full { grid-column: 1 / -1; }
     .cfg-actions {
@@ -5333,6 +5420,8 @@ def build_progress_html() -> str:
       input[type="text"] { min-width: 100%; }
       .card h3 { font-size: 23px; }
       .cfg-grid { grid-template-columns: 1fr; }
+      .cfg-grid label { grid-template-columns: 1fr; gap: 6px; }
+      .cfg-grid label > span { white-space: normal; overflow: visible; text-overflow: clip; }
     }
     @media (max-width: 640px) {
       .grid { grid-template-columns: minmax(0, 1fr); }
@@ -5449,6 +5538,9 @@ def build_progress_html() -> str:
           <label><span data-i18n="max_per_source">每源抓取</span>
             <input id="cfgMaxPerSource" type="number" min="1" max="120" value="20" />
           </label>
+          <label><span data-i18n="fetch_workers">抓取并发线程</span>
+            <input id="cfgFetchWorkers" type="number" min="1" max="16" value="6" />
+          </label>
           <label><span data-i18n="push_channel">推送渠道</span>
             <select id="cfgNotifyChannel">
               <option value="feishu">Feishu</option>
@@ -5466,7 +5558,14 @@ def build_progress_html() -> str:
             <input id="cfgNotifyLimit" type="number" min="1" max="30" value="8" />
           </label>
           <label><span data-i18n="output_language">输出语言</span>
-            <input id="cfgOutputLanguage" type="text" placeholder="Chinese / English / Korean / Japanese / French / Traditional Chinese" />
+            <select id="cfgOutputLanguage">
+              <option value="Chinese" data-i18n="lang_chinese">简体中文</option>
+              <option value="Traditional Chinese" data-i18n="lang_traditional_chinese">繁体中文</option>
+              <option value="English" data-i18n="lang_english">English</option>
+              <option value="Japanese" data-i18n="lang_japanese">日本語</option>
+              <option value="Korean" data-i18n="lang_korean">한국어</option>
+              <option value="French" data-i18n="lang_french">Français</option>
+            </select>
           </label>
           <label><span data-i18n="auto_interval">定时抓取(分钟)</span>
             <input id="cfgAutoInterval" type="number" min="5" max="1440" value="60" />
@@ -5670,11 +5769,18 @@ def build_progress_html() -> str:
         page_title_oss: "OmniHawk AI · AI 开源生态与开发者信号",
         fetch_now: "抓取官方源",
         max_per_source: "每源抓取",
+        fetch_workers: "抓取并发线程",
         refresh: "刷新",
         push_now: "推送当前结果",
         push_channel: "推送渠道",
         push_limit: "推送条数",
         output_language: "输出语言",
+        lang_chinese: "简体中文",
+        lang_traditional_chinese: "繁体中文",
+        lang_english: "English",
+        lang_japanese: "日本语",
+        lang_korean: "韩语",
+        lang_french: "法语",
         search_ph: "关键词（标题/摘要/来源）",
         region: "区域",
         region_any: "全部",
@@ -5792,11 +5898,18 @@ def build_progress_html() -> str:
         page_title_oss: "OmniHawk AI · OSS & Dev Signals",
         fetch_now: "Fetch Official Sources",
         max_per_source: "Items per Source",
+        fetch_workers: "Fetch Worker Pool",
         refresh: "Refresh",
         push_now: "Push Current Results",
         push_channel: "Push Channel",
         push_limit: "Push Count",
         output_language: "Output Language",
+        lang_chinese: "Simplified Chinese",
+        lang_traditional_chinese: "Traditional Chinese",
+        lang_english: "English",
+        lang_japanese: "Japanese",
+        lang_korean: "Korean",
+        lang_french: "French",
         search_ph: "Keyword (title/summary/source)",
         region: "Region",
         region_any: "All",
@@ -6358,7 +6471,7 @@ def build_progress_html() -> str:
     }
 
     async function loadSources() {
-      const data = await fetchJSON("/api/progress/sources");
+      const data = await fetchJSON(`/api/progress/sources?scope=${encodeURIComponent(state.activeTab)}`);
       state.sources = Array.isArray(data.items) ? data.items : [];
       fillSourceOptions();
     }
@@ -6379,6 +6492,9 @@ def build_progress_html() -> str:
       setFetchButtonRunning(true);
       try {
         const maxPerSource = Number(document.getElementById("maxPerSource")?.value || 20);
+        const fetchWorkers = Number(
+          document.getElementById("cfgFetchWorkers")?.value || state.pageSettings?.fetch_workers || 6
+        );
         const cfgIds = Array.isArray(state.pageSettings?.source_ids) ? state.pageSettings.source_ids : [];
         const data = await fetchJSON("/api/progress/fetch/start", {
           method: "POST",
@@ -6386,6 +6502,7 @@ def build_progress_html() -> str:
           body: JSON.stringify({
             scope: state.activeTab,
             max_per_source: maxPerSource,
+            fetch_workers: fetchWorkers,
             source_ids: cfgIds,
             async: true,
           })
@@ -6459,6 +6576,7 @@ def build_progress_html() -> str:
         el.value = (value ?? "").toString();
       };
       set("cfgMaxPerSource", settings.max_per_source || 20);
+      set("cfgFetchWorkers", settings.fetch_workers || 6);
       set("cfgNotifyChannel", settings.notify_channel || "feishu");
       set("cfgNotifyLimit", settings.notify_limit || 8);
       set("cfgOutputLanguage", settings.output_language || (state.lang === "en-US" ? "English" : "Chinese"));
@@ -6494,6 +6612,7 @@ def build_progress_html() -> str:
       return {
         scope: state.activeTab,
         max_per_source: Number(document.getElementById("cfgMaxPerSource")?.value || 20),
+        fetch_workers: Number(document.getElementById("cfgFetchWorkers")?.value || 6),
         notify_channel: String(document.getElementById("cfgNotifyChannel")?.value || "feishu"),
         notify_limit: Number(document.getElementById("cfgNotifyLimit")?.value || 8),
         output_language: String(document.getElementById("cfgOutputLanguage")?.value || "").trim() || (state.lang === "en-US" ? "English" : "Chinese"),
