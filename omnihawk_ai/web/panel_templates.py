@@ -336,7 +336,7 @@ def build_panel_html() -> str:
     .settings.open { display: block; }
     .settings .grid2 {
       display: grid;
-      grid-template-columns: 180px 1fr;
+      grid-template-columns: 160px minmax(180px, 1fr) 160px minmax(180px, 1fr);
       gap: 8px 10px;
       align-items: center;
     }
@@ -510,12 +510,7 @@ def build_panel_html() -> str:
           <input id="aiBase" type="text" placeholder="例如：https://novaapi.top/v1" />
 
           <label for="aiKey">LLM API Key</label>
-          <input id="aiKey" type="password" placeholder="sk-..." />
-
-          <label for="paperMax">每次分析篇数</label>
-          <input id="paperMax" type="number" min="1" max="200" />
-
-          <label for="feishuWebhook">飞书 Webhook</label>
+          <input id="aiKey" type="password" placeholder="sk-..." />          <label for="feishuWebhook">飞书 Webhook</label>
           <input id="feishuWebhook" type="text" placeholder="https://open.feishu.cn/..." />
 
           <label for="weworkWebhook">企业微信 Webhook</label>
@@ -558,6 +553,10 @@ def build_panel_html() -> str:
   </div>
 
   <script>
+    const PAPER_PAGE_SIZE = 20;
+    const MAX_PAPER_LIST_LIMIT = 500;
+    const PAPER_SCROLL_LOAD_THRESHOLD_PX = 320;
+
     const state = {
       status: null,
       papers: [],
@@ -1445,10 +1444,7 @@ def build_settings_html() -> str:
         <label for="aiKey">LLM API Key</label>
         <input id="aiKey" type="password" placeholder="sk-..." />
       </div>
-      <div class="row">
-        <label for="paperMax">每次分析篇数</label>
-        <input id="paperMax" type="number" min="1" max="200" />
-      </div>
+      <div class="row">      </div>
       <div class="row">
         <label for="hideUnanalyzed">仅显示已分析论文</label>
         <input id="hideUnanalyzed" type="checkbox" />
@@ -1809,16 +1805,12 @@ def build_panel_html_v2() -> str:
       grid-template-columns: 1fr;
       gap: 10px;
       margin: 14px 0 0;
-      align-items: start;
-      grid-auto-rows: 1fr;
+      align-items: stretch;
     }
+    #papers { width: 100%; max-width: 100%; }
     .grid > .empty {
       grid-column: 1 / -1;
       justify-self: center;
-    }
-    .grid > .card:only-child {
-      grid-column: 1 / -1;
-      justify-self: stretch;
     }
     .card {
       background: var(--card);
@@ -1826,9 +1818,10 @@ def build_panel_html_v2() -> str:
       padding: 12px;
       display: flex;
       flex-direction: column;
-      height: 100%;
+      min-width: 0;
       box-shadow: var(--card-shadow);
       transition: transform 0.2s ease, box-shadow 0.24s ease;
+      overflow: hidden;
     }
     .card:hover { transform: translateY(-4px); }
     :root[data-theme="light"] .card:hover { box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12); }
@@ -1905,7 +1898,7 @@ def build_panel_html_v2() -> str:
     }
     .settings .grid2 {
       display: grid;
-      grid-template-columns: 180px 1fr;
+      grid-template-columns: 160px minmax(180px, 1fr) 160px minmax(180px, 1fr);
       gap: 8px 10px;
       align-items: center;
     }
@@ -2003,6 +1996,7 @@ def build_panel_html_v2() -> str:
     @media (max-width: 1200px) {
       .main-layout { grid-template-columns: 1fr; }
       .sidebar { position: static; top: auto; }
+      .settings .grid2 { grid-template-columns: 160px minmax(0, 1fr); }
     }
     @media (max-width: 1280px) {
       .grid { grid-template-columns: 1fr; }
@@ -2041,13 +2035,13 @@ def build_panel_html_v2() -> str:
               <path d="M3 5h12M9 3v2M7 5a17 17 0 0 0 5 10M9 5a17 17 0 0 1-5 10"></path>
               <path d="M14 13h7M17.5 10v3M16 21l1.5-3 1.5 3"></path>
             </svg>
-            <span id="langShort">ZH</span>
+            <span id="langShort">EN</span>
           </button>
           <button id="themeToggle" class="icon-btn" type="button" title="Theme">
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 1 0 9.8 9.8Z"></path>
             </svg>
-            <span id="themeShort">Dark</span>
+            <span id="themeShort">Light</span>
           </button>
         </div>
       </div>
@@ -2142,7 +2136,14 @@ def build_panel_html_v2() -> str:
           <input id="paperSubtopics" type="text" placeholder="agent, llm, rag, reasoning" />
 
           <label for="analysisLanguage" data-i18n="cfg_output_language">输出语言</label>
-          <input id="analysisLanguage" type="text" placeholder="Chinese / English / Korean / Japanese / French / Traditional Chinese" />
+          <select id="analysisLanguage">
+            <option value="Chinese">简体中文</option>
+            <option value="Traditional Chinese">繁體中文</option>
+            <option value="English">English</option>
+            <option value="French">Français</option>
+            <option value="Japanese">日本語</option>
+            <option value="Korean">한국어</option>
+          </select>
 
           <label for="aiModel">LLM Model</label>
           <input id="aiModel" type="text" placeholder="qwen3.5-35b-a3b" />
@@ -2159,15 +2160,7 @@ def build_panel_html_v2() -> str:
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
             </button>
-          </div>
-
-          <label for="paperMax" data-i18n="cfg_paper_max">每次分析篇数</label>
-          <input id="paperMax" type="number" min="1" max="200" />
-
-          <label for="paperMaxPerSource" data-i18n="cfg_max_per_source">每源抓取条数</label>
-          <input id="paperMaxPerSource" type="number" min="1" max="120" />
-
-          <label for="paperNotifyChannel" data-i18n="cfg_notify_channel">默认推送渠道</label>
+          </div>          <label for="paperNotifyChannel" data-i18n="cfg_notify_channel">默认推送渠道</label>
           <select id="paperNotifyChannel">
             <option value="feishu">Feishu</option>
             <option value="wework">WeCom</option>
@@ -2179,9 +2172,6 @@ def build_panel_html_v2() -> str:
             <option value="slack">Slack</option>
             <option value="email">Email</option>
           </select>
-
-          <label for="paperNotifyLimit" data-i18n="cfg_notify_limit">默认推送条数</label>
-          <input id="paperNotifyLimit" type="number" min="1" max="30" />
 
           <label for="paperAutoEnabled" data-i18n="cfg_auto_enabled">启用定时抓取</label>
           <select id="paperAutoEnabled">
@@ -2355,7 +2345,6 @@ def build_panel_html_v2() -> str:
       </div>
       <div id="actionMsg" class="status"></div>
       <div id="error" class="status error"></div>
-    </div>
     <div id="papers" class="grid"></div>
   </div>
 
@@ -2741,8 +2730,17 @@ def build_panel_html_v2() -> str:
       lang: localStorage.getItem("panel_lang") || "zh-CN",
       theme: localStorage.getItem("panel_theme") || "dark",
       aiKeyVisible: false,
-      savingSubscription: false
+      savingSubscription: false,
+      paperPageSize: 20,
+      paperListLimit: 20,
+      paperHasMore: false,
+      papersLoading: false,
+      scrollTicking: false,
     };
+
+    const PAPER_PAGE_SIZE = 20;
+    const MAX_PAPER_LIST_LIMIT = 500;
+    const PAPER_SCROLL_LOAD_THRESHOLD_PX = 320;
 
     function t(key, vars = {}) {
       const table = I18N[state.lang] || I18N["zh-CN"];
@@ -2772,7 +2770,7 @@ def build_panel_html_v2() -> str:
     function currentOutputLanguage() {
       const explicit = (document.getElementById("analysisLanguage")?.value || state.settings?.analysis_language || "").toString().trim();
       if (explicit) return explicit;
-      return state.lang === "en-US" ? "English" : "Chinese";
+      return "Chinese";
     }
 
     function updateTopToggles() {
@@ -2780,8 +2778,8 @@ def build_panel_html_v2() -> str:
       const themeShort = document.getElementById("themeShort");
       const langToggle = document.getElementById("langToggle");
       const themeToggle = document.getElementById("themeToggle");
-      if (langShort) langShort.textContent = state.lang === "zh-CN" ? t("lang_short_zh") : t("lang_short_en");
-      if (themeShort) themeShort.textContent = state.theme === "dark" ? t("theme_short_dark") : t("theme_short_light");
+      if (langShort) langShort.textContent = state.lang === "zh-CN" ? t("lang_short_en") : t("lang_short_zh");
+      if (themeShort) themeShort.textContent = state.theme === "dark" ? t("theme_short_light") : t("theme_short_dark");
       if (langToggle) langToggle.title = state.lang === "zh-CN" ? t("tip_lang_to_en") : t("tip_lang_to_zh");
       if (themeToggle) themeToggle.title = state.theme === "dark" ? t("tip_theme_to_light") : t("tip_theme_to_dark");
     }
@@ -2812,9 +2810,7 @@ def build_panel_html_v2() -> str:
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           body.classList.add("page-leaving");
-          window.setTimeout(() => {
-            window.location.href = href;
-          }, 180);
+          window.location.href = href;
         });
       });
     }
@@ -2916,8 +2912,21 @@ def build_panel_html_v2() -> str:
     }
 
     function captureQueryFromInputs(overrides = {}) {
+      const rawLimit = Number(
+        overrides.limit
+        || state.paperListLimit
+        || state.paperPageSize
+        || PAPER_PAGE_SIZE
+      );
+      const safeLimit = Math.max(
+        1,
+        Math.min(
+          Number.isFinite(rawLimit) ? Math.floor(rawLimit) : PAPER_PAGE_SIZE,
+          MAX_PAPER_LIST_LIMIT,
+        ),
+      );
       return {
-        limit: Number(overrides.limit || 100),
+        limit: safeLimit,
         mode: overrides.mode || document.getElementById("viewMode")?.value || "all",
         sort_by: overrides.sort_by || document.getElementById("sortMode")?.value || "score",
         sort_order: "desc",
@@ -2929,7 +2938,15 @@ def build_panel_html_v2() -> str:
     function buildPaperQueryParams(queryObj = null) {
       const query = queryObj || state.appliedQuery || captureQueryFromInputs();
       const params = new URLSearchParams();
-      params.set("limit", String(query.limit || 100));
+      const rawLimit = Number(query.limit || state.paperListLimit || state.paperPageSize || PAPER_PAGE_SIZE);
+      const safeLimit = Math.max(
+        1,
+        Math.min(
+          Number.isFinite(rawLimit) ? Math.floor(rawLimit) : PAPER_PAGE_SIZE,
+          MAX_PAPER_LIST_LIMIT,
+        ),
+      );
+      params.set("limit", String(safeLimit));
       params.set("mode", query.mode || "all");
       params.set("sort_by", query.sort_by || "score");
       params.set("sort_order", "desc");
@@ -2943,8 +2960,14 @@ def build_panel_html_v2() -> str:
       return params;
     }
 
+    function resetPaperListLimit() {
+      state.paperListLimit = state.paperPageSize || PAPER_PAGE_SIZE;
+      state.paperHasMore = false;
+    }
+
     async function applyFiltersAndRefresh(showMessage = false) {
-      state.appliedQuery = captureQueryFromInputs();
+      resetPaperListLimit();
+      state.appliedQuery = captureQueryFromInputs({ limit: state.paperListLimit });
       await refreshPapers();
       if (showMessage) setMessage(t("msg_filter_applied"));
     }
@@ -2960,9 +2983,13 @@ def build_panel_html_v2() -> str:
       });
       const mode = params.get("mode");
       const sortBy = params.get("sort_by");
+      // Do not restore large list limits from URL on boot.
+      // Always start from one page (20) to keep first paint responsive.
+      resetPaperListLimit();
       if (mode && document.getElementById("viewMode")) document.getElementById("viewMode").value = mode;
       if (sortBy && document.getElementById("sortMode")) document.getElementById("sortMode").value = sortBy;
       state.appliedQuery = captureQueryFromInputs({
+        limit: state.paperListLimit,
         mode: mode || undefined,
         sort_by: sortBy || undefined
       });
@@ -3154,7 +3181,8 @@ def build_panel_html_v2() -> str:
       if (enabledEl) enabledEl.value = item.enabled ? "1" : "0";
       if (item.mode && document.getElementById("viewMode")) document.getElementById("viewMode").value = item.mode;
       if (item.sort_by && document.getElementById("sortMode")) document.getElementById("sortMode").value = item.sort_by;
-      state.appliedQuery = captureQueryFromInputs();
+      resetPaperListLimit();
+      state.appliedQuery = captureQueryFromInputs({ limit: state.paperListLimit });
       refreshPapers().catch((e) => setError(e.message || String(e)));
       setMessage(t("msg_sub_applied", { name: item.name || "-" }));
     }
@@ -3234,14 +3262,11 @@ def build_panel_html_v2() -> str:
       };
       set("paperPrimaryCategory", data.paper_primary_category || "");
       set("paperSubtopics", data.paper_subtopics || "");
-      set("analysisLanguage", data.analysis_language || (state.lang === "en-US" ? "English" : "Chinese"));
+      set("analysisLanguage", data.analysis_language || "Chinese");
       set("aiModel", normalizeModelName(data.ai_model || ""));
       set("aiBase", data.ai_api_base || "");
       set("aiKey", data.ai_api_key || "");
-      set("paperMax", data.paper_max_papers_per_run || 20);
-      set("paperMaxPerSource", data.max_per_source || 20);
       set("paperNotifyChannel", data.notify_channel || "feishu");
-      set("paperNotifyLimit", data.notify_limit || 8);
       set("paperAutoEnabled", data.auto_enabled ? "1" : "0");
       set("paperAutoInterval", data.auto_interval_minutes || 60);
       set("paperAutoPushEnabled", data.auto_push_enabled ? "1" : "0");
@@ -3276,10 +3301,7 @@ def build_panel_html_v2() -> str:
         ai_model: normalizeModelName(document.getElementById("aiModel").value.trim()),
         ai_api_base: document.getElementById("aiBase").value.trim(),
         ai_api_key: document.getElementById("aiKey").value.trim(),
-        paper_max_papers_per_run: Number(document.getElementById("paperMax").value || 20),
-        max_per_source: Number(document.getElementById("paperMaxPerSource").value || 20),
         notify_channel: document.getElementById("paperNotifyChannel").value || "feishu",
-        notify_limit: Number(document.getElementById("paperNotifyLimit").value || 8),
         auto_enabled: (document.getElementById("paperAutoEnabled").value || "0") === "1",
         auto_interval_minutes: Number(document.getElementById("paperAutoInterval").value || 60),
         auto_push_enabled: (document.getElementById("paperAutoPushEnabled").value || "0") === "1",
@@ -3376,20 +3398,84 @@ def build_panel_html_v2() -> str:
     }
 
     async function refreshPapers(options = {}) {
-      if (!state.appliedQuery) state.appliedQuery = captureQueryFromInputs();
-      const params = buildPaperQueryParams(state.appliedQuery);
+      if (state.papersLoading && !options.force) return;
+      state.papersLoading = true;
       try {
-        window.history.replaceState(null, "", `?${params.toString()}`);
-      } catch (_) {}
-      const data = await fetchJSON(`/api/papers?${params.toString()}`);
-      state.papers = data.papers || [];
-      state.paperStats = data.stats || null;
-      if (state.status) state.status.db_path = data.db_path || state.status.db_path;
-      renderFavoriteSummary();
-      renderCards();
-      if (!options.skipTranslation) {
-        triggerPaperTranslation().catch(() => {});
+        if (!state.appliedQuery) {
+          state.appliedQuery = captureQueryFromInputs({ limit: state.paperListLimit });
+        }
+        const applied = {
+          ...state.appliedQuery,
+          limit: state.paperListLimit || state.paperPageSize || PAPER_PAGE_SIZE,
+        };
+        state.appliedQuery = applied;
+        const params = buildPaperQueryParams(applied);
+        try {
+          window.history.replaceState(null, "", `?${params.toString()}`);
+        } catch (_) {}
+        const data = await fetchJSON(`/api/papers?${params.toString()}`);
+        const papers = Array.isArray(data.papers) ? data.papers : [];
+        state.papers = papers;
+        state.paperStats = data.stats || null;
+        if (state.status) state.status.db_path = data.db_path || state.status.db_path;
+
+        const totalFilteredRaw = Number(
+          data.total_filtered
+          ?? data.total_matched
+          ?? (data.stats && data.stats.total_filtered)
+          ?? (data.stats && data.stats.total_matched)
+          ?? papers.length,
+        );
+        const totalFiltered = Number.isFinite(totalFilteredRaw) ? totalFilteredRaw : papers.length;
+        state.paperHasMore = totalFiltered > papers.length && state.paperListLimit < MAX_PAPER_LIST_LIMIT;
+        if (
+          !state.paperHasMore
+          && papers.length >= Math.max(1, state.paperPageSize || PAPER_PAGE_SIZE)
+          && papers.length >= Math.max(1, Math.min(state.paperListLimit || PAPER_PAGE_SIZE, MAX_PAPER_LIST_LIMIT))
+          && state.paperListLimit < MAX_PAPER_LIST_LIMIT
+        ) {
+          state.paperHasMore = true;
+        }
+
+        renderFavoriteSummary();
+        renderCards();
+        if (!options.skipTranslation) {
+          triggerPaperTranslation().catch(() => {});
+        }
+      } finally {
+        state.papersLoading = false;
       }
+    }
+
+    function shouldLoadMorePapersByScroll() {
+      if (state.papersLoading || !state.paperHasMore) return false;
+      const doc = document.documentElement;
+      const scrollTop = window.scrollY || doc.scrollTop || 0;
+      const viewportHeight = window.innerHeight || doc.clientHeight || 0;
+      const docHeight = Math.max(doc.scrollHeight || 0, document.body ? document.body.scrollHeight : 0);
+      return (scrollTop + viewportHeight) >= (docHeight - PAPER_SCROLL_LOAD_THRESHOLD_PX);
+    }
+
+    async function loadMorePapersByScroll() {
+      if (!shouldLoadMorePapersByScroll()) return;
+      const nextLimit = Math.min(
+        MAX_PAPER_LIST_LIMIT,
+        (state.paperListLimit || state.paperPageSize || PAPER_PAGE_SIZE)
+          + (state.paperPageSize || PAPER_PAGE_SIZE),
+      );
+      if (nextLimit <= state.paperListLimit) return;
+      state.paperListLimit = nextLimit;
+      state.appliedQuery = captureQueryFromInputs({ limit: state.paperListLimit });
+      await refreshPapers();
+    }
+
+    function onPaperScrollLoadMore() {
+      if (state.scrollTicking) return;
+      state.scrollTicking = true;
+      window.requestAnimationFrame(() => {
+        state.scrollTicking = false;
+        loadMorePapersByScroll().catch((e) => setError(e.message || String(e)));
+      });
     }
 
     async function runNow() {
@@ -3633,6 +3719,7 @@ def build_panel_html_v2() -> str:
     });
     document.getElementById("viewMode").addEventListener("change", async () => { await applyFiltersAndRefresh(false); });
     document.getElementById("sortMode").addEventListener("change", async () => { await applyFiltersAndRefresh(false); });
+    window.addEventListener("scroll", onPaperScrollLoadMore, { passive: true });
     window.addEventListener("beforeunload", () => stopStatusPolling());
 
     initPageShellMotion();
@@ -3641,8 +3728,10 @@ def build_panel_html_v2() -> str:
       applyTheme();
       applyI18n();
       syncFiltersFromUrl();
-      await Promise.all([loadSettings(), refreshNow()]);
-      await syncAnalysisLanguageSetting();
+      const settingsTask = loadSettings().catch((e) => setError(e.message || String(e)));
+      await refreshNow();
+      syncAnalysisLanguageSetting().catch(() => {});
+      await settingsTask;
     }
 
     boot().catch((e) => setError(e.message || String(e)));
@@ -5468,15 +5557,6 @@ def build_progress_html() -> str:
       </div>
       <div class="row">
         <button id="fetchNow" class="primary" data-i18n="fetch_now">抓取官方源</button>
-        <label><span data-i18n="max_per_source">每源抓取</span>
-          <select id="maxPerSource">
-            <option value="5">5</option>
-            <option value="12">12</option>
-            <option value="20" selected>20</option>
-            <option value="40">40</option>
-            <option value="80">80</option>
-          </select>
-        </label>
         <button id="refreshNow" data-i18n="refresh">刷新</button>
         <label><span data-i18n="push_channel">推送渠道</span>
           <select id="notifyChannel">
@@ -5534,11 +5614,7 @@ def build_progress_html() -> str:
       </div>
       <div id="progressSettingsBox" class="panel-box">
         <h4 data-i18n="settings_title">页面参数配置</h4>
-        <div class="cfg-grid">
-          <label><span data-i18n="max_per_source">每源抓取</span>
-            <input id="cfgMaxPerSource" type="number" min="1" max="120" value="20" />
-          </label>
-          <label><span data-i18n="fetch_workers">抓取并发线程</span>
+        <div class="cfg-grid"><label><span data-i18n="fetch_workers">抓取并发线程</span>
             <input id="cfgFetchWorkers" type="number" min="1" max="16" value="6" />
           </label>
           <label><span data-i18n="push_channel">推送渠道</span>
@@ -5553,18 +5629,14 @@ def build_progress_html() -> str:
               <option value="slack">Slack</option>
               <option value="email">Email</option>
             </select>
-          </label>
-          <label><span data-i18n="push_limit">推送条数</span>
-            <input id="cfgNotifyLimit" type="number" min="1" max="30" value="8" />
-          </label>
-          <label><span data-i18n="output_language">输出语言</span>
+          </label><label><span data-i18n="output_language">输出语言</span>
             <select id="cfgOutputLanguage">
-              <option value="Chinese" data-i18n="lang_chinese">简体中文</option>
-              <option value="Traditional Chinese" data-i18n="lang_traditional_chinese">繁体中文</option>
-              <option value="English" data-i18n="lang_english">English</option>
-              <option value="Japanese" data-i18n="lang_japanese">日本語</option>
-              <option value="Korean" data-i18n="lang_korean">한국어</option>
-              <option value="French" data-i18n="lang_french">Français</option>
+              <option value="Chinese">简体中文</option>
+              <option value="Traditional Chinese">繁體中文</option>
+              <option value="English">English</option>
+              <option value="French">Français</option>
+              <option value="Japanese">日本語</option>
+              <option value="Korean">한국어</option>
             </select>
           </label>
           <label><span data-i18n="auto_interval">定时抓取(分钟)</span>
@@ -6029,6 +6101,11 @@ def build_progress_html() -> str:
       "/policy-safety": "policy_safety",
       "/oss": "oss_signal",
     };
+    const PAGE_SIZE = 20;
+    const MAX_LIST_LIMIT = 500;
+    const SCROLL_LOAD_THRESHOLD_PX = 320;
+    const FIXED_MAX_PER_SOURCE = 20;
+    const FIXED_PUSH_LIMIT = 8;
 
     const state = {
       lang: localStorage.getItem("panel_lang") || "zh-CN",
@@ -6043,6 +6120,13 @@ def build_progress_html() -> str:
       translatingKeys: {},
       fetchPollTimer: null,
       fetchRunning: false,
+      pageSize: PAGE_SIZE,
+      listLimit: PAGE_SIZE,
+      hasMoreItems: false,
+      itemsLoading: false,
+      scrollTicking: false,
+      routeSwitching: false,
+      routeSeq: 0,
       finishedJobIds: {},
       query: {
         q: "",
@@ -6108,17 +6192,113 @@ def build_progress_html() -> str:
       return raw;
     }
 
-    function applyProgressMode() {
-      const path = normalizePath(window.location.pathname || "/progress");
+    function isOssScope() {
+      return String(state.activeTab || "") === "oss_signal";
+    }
+
+    function applyScopeFilterVisibility() {
+      const hideExtra = isOssScope();
+      const toggleById = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const host = el.closest("label");
+        if (!host) return;
+        host.style.display = hideExtra ? "none" : "";
+      };
+      [
+        "filterSource",
+        "filterRegion",
+        "filterEventType",
+        "cfgSource",
+        "cfgRegion",
+        "cfgEventType",
+        "subSource",
+        "subRegion",
+        "subEventType",
+      ].forEach(toggleById);
+    }
+
+    function applyProgressMode(pathInput = "") {
+      const path = normalizePath(pathInput || window.location.pathname || "/progress");
       const modeName = ROUTE_MODE_MAP[path] || "frontier";
       const mode = MODE_CONFIG[modeName] || MODE_CONFIG.frontier;
       state.fixedKind = String(mode.kind || "");
       state.activeTab = String(mode.tabValue || "frontier");
       state.pageTitleKey = String(mode.titleKey || "page_title_progress");
+      if (state.activeTab === "oss_signal") {
+        state.query.source_id = "";
+        state.query.region = "";
+        state.query.event_type = "";
+      }
       document.querySelectorAll("[data-progress-tab]").forEach((tab) => {
         const tabValue = String(tab.getAttribute("data-progress-tab") || "");
         tab.classList.toggle("active", tabValue === state.activeTab);
       });
+      applyScopeFilterVisibility();
+      const titleText = t(state.pageTitleKey || "page_title_progress");
+      const pageTitle = document.getElementById("pageTitle");
+      if (pageTitle) pageTitle.textContent = titleText;
+      document.title = titleText;
+      return modeName;
+    }
+
+    async function switchProgressRoute(targetPath, opts = {}) {
+      const path = normalizePath(targetPath || "/progress");
+      const modeName = ROUTE_MODE_MAP[path];
+      if (!modeName) {
+        window.location.href = path;
+        return;
+      }
+      const pushHistory = opts && opts.pushHistory !== false;
+      const currentPath = normalizePath(window.location.pathname || "/progress");
+      const pathChanged = path !== currentPath;
+      const currentMode = ROUTE_MODE_MAP[currentPath] || "frontier";
+      const modeChanged = currentMode !== modeName;
+      if (!pathChanged && !modeChanged && state.pageSettings) return;
+
+      if (pushHistory && pathChanged) {
+        try {
+          window.history.pushState({ progressPath: path }, "", path);
+        } catch (_) {}
+      }
+
+      const routeSeq = ++state.routeSeq;
+      state.routeSwitching = true;
+      stopFetchPolling();
+      setError("");
+      setMessage(state.lang === "en-US" ? "Switching page..." : "正在切换页面...");
+      state.query = { q: "", source_id: "", region: "", event_type: "" };
+      resetListLimit();
+      state.items = [];
+      state.subscriptions = [];
+      state.sources = [];
+      applyInputs(state.query);
+      try { window.scrollTo({ top: 0, behavior: "auto" }); } catch (_) {}
+      applyProgressMode(path);
+      renderCards();
+      renderProgressSubscriptions();
+
+      try {
+        await Promise.all([
+          loadProgressSettings(routeSeq),
+          loadProgressSubscriptions(routeSeq),
+          refreshItems(routeSeq),
+        ]);
+        if (routeSeq !== state.routeSeq) return;
+        applyI18n();
+        await checkFetchStatus().catch(() => {});
+        if (routeSeq === state.routeSeq) {
+          setMessage("");
+        }
+      } catch (e) {
+        if (routeSeq === state.routeSeq) {
+          setError(e.message || String(e));
+        }
+      } finally {
+        if (routeSeq === state.routeSeq) {
+          state.routeSwitching = false;
+        }
+      }
     }
 
     function applyTheme() {
@@ -6137,6 +6317,12 @@ def build_progress_html() -> str:
         link.addEventListener("click", (event) => {
           const href = link.getAttribute("href") || "";
           if (!href || link.classList.contains("active")) return;
+          const normalizedHref = normalizePath(href);
+          if (ROUTE_MODE_MAP[normalizedHref]) {
+            event.preventDefault();
+            switchProgressRoute(normalizedHref, { pushHistory: true }).catch((e) => setError(e.message || String(e)));
+            return;
+          }
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           body.classList.add("page-leaving");
@@ -6144,6 +6330,11 @@ def build_progress_html() -> str:
             window.location.href = href;
           }, 180);
         });
+      });
+      window.addEventListener("popstate", () => {
+        const path = normalizePath(window.location.pathname || "/progress");
+        if (!ROUTE_MODE_MAP[path]) return;
+        switchProgressRoute(path, { pushHistory: false }).catch((e) => setError(e.message || String(e)));
       });
     }
 
@@ -6167,7 +6358,9 @@ def build_progress_html() -> str:
       fillSourceOptions();
       renderCards();
       renderProgressSubscriptions();
-      ensureTargetTranslations().catch(() => {});
+      if (!isOssScope()) {
+        ensureTargetTranslations().catch(() => {});
+      }
     }
 
     function toDateText(iso) {
@@ -6271,37 +6464,51 @@ def build_progress_html() -> str:
     }
 
     function captureQuery() {
+      const ossScope = isOssScope();
       return {
         q: (document.getElementById("searchQ")?.value || "").trim(),
-        source_id: (document.getElementById("filterSource")?.value || "").trim(),
-        region: (document.getElementById("filterRegion")?.value || "").trim(),
-        event_type: (document.getElementById("filterEventType")?.value || "").trim(),
+        source_id: ossScope ? "" : (document.getElementById("filterSource")?.value || "").trim(),
+        region: ossScope ? "" : (document.getElementById("filterRegion")?.value || "").trim(),
+        event_type: ossScope ? "" : (document.getElementById("filterEventType")?.value || "").trim(),
       };
     }
 
     function applyInputs(q) {
       const query = q || {};
+      const ossScope = isOssScope();
       const set = (id, value) => {
         const el = document.getElementById(id);
         if (!el) return;
         el.value = value || "";
       };
       set("searchQ", query.q || "");
-      set("filterSource", query.source_id || "");
-      set("filterRegion", query.region || "");
-      set("filterEventType", query.event_type || "");
+      set("filterSource", ossScope ? "" : (query.source_id || ""));
+      set("filterRegion", ossScope ? "" : (query.region || ""));
+      set("filterEventType", ossScope ? "" : (query.event_type || ""));
     }
 
-    function buildParams(query) {
+    function buildParams(query, limitOverride = 0) {
       const params = new URLSearchParams();
       if (query.q) params.set("q", query.q);
-      if (query.source_id) params.set("source_id", query.source_id);
-      if (query.region) params.set("region", query.region);
-      if (query.event_type) params.set("event_type", query.event_type);
+      if (!isOssScope()) {
+        if (query.source_id) params.set("source_id", query.source_id);
+        if (query.region) params.set("region", query.region);
+        if (query.event_type) params.set("event_type", query.event_type);
+      }
       params.set("scope", state.activeTab || "frontier");
       if (state.fixedKind) params.set("kind", state.fixedKind);
-      params.set("limit", "200");
+      const rawLimit = Number(limitOverride || state.listLimit || state.pageSize || PAGE_SIZE);
+      const safeLimit = Math.max(
+        1,
+        Math.min(Number.isFinite(rawLimit) ? Math.floor(rawLimit) : PAGE_SIZE, MAX_LIST_LIMIT),
+      );
+      params.set("limit", String(safeLimit));
       return params;
+    }
+
+    function resetListLimit() {
+      state.listLimit = state.pageSize || PAGE_SIZE;
+      state.hasMoreItems = false;
     }
 
     function syncFromUrl() {
@@ -6312,6 +6519,17 @@ def build_progress_html() -> str:
         region: p.get("region") || "",
         event_type: p.get("event_type") || "",
       };
+      if (isOssScope()) {
+        state.query.source_id = "";
+        state.query.region = "";
+        state.query.event_type = "";
+      }
+      const limitRaw = Number(p.get("limit") || "");
+      if (Number.isFinite(limitRaw) && limitRaw > 0) {
+        state.listLimit = Math.max(state.pageSize || PAGE_SIZE, Math.min(Math.floor(limitRaw), MAX_LIST_LIMIT));
+      } else {
+        resetListLimit();
+      }
       applyInputs(state.query);
     }
 
@@ -6327,12 +6545,32 @@ def build_progress_html() -> str:
       const alias = {
         english: "en",
         chinese: "zh",
+        "simplified chinese": "zh",
+        "简体中文": "zh",
+        "簡體中文": "zh",
+        "中文": "zh",
         "traditional chinese": "zh-hant",
+        "繁体中文": "zh-hant",
+        "繁體中文": "zh-hant",
         korean: "ko",
+        "한국어": "ko",
+        "韩语": "ko",
+        "韓語": "ko",
         japanese: "ja",
+        "日本語": "ja",
+        "日本语": "ja",
+        "日语": "ja",
+        "日語": "ja",
         french: "fr",
+        "français": "fr",
+        "法语": "fr",
+        "法語": "fr",
       };
       return alias[raw] || raw.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "zh";
+    }
+
+    function isSimplifiedLangKey(langKey) {
+      return String(langKey || "") === "zh";
     }
 
     function pickProgressLocalized(it, field) {
@@ -6343,15 +6581,15 @@ def build_progress_html() -> str:
       const mapped = String(entry?.[field] || "").trim();
       if (mapped) return mapped;
       if (field === "title") {
-        if (langKey === "zh" || langKey.startsWith("zh-")) return String(it.title_zh || it.title || "");
+        if (isSimplifiedLangKey(langKey)) return String(it.title_zh || it.title || "");
         return String(it.title || it.title_zh || "");
       }
       if (field === "summary") {
-        if (langKey === "zh" || langKey.startsWith("zh-")) return String(it.summary_zh || it.summary || "");
+        if (isSimplifiedLangKey(langKey)) return String(it.summary_zh || it.summary || "");
         return String(it.summary || it.summary_zh || "");
       }
       if (field === "llm_takeaway") {
-        if (langKey === "zh" || langKey.startsWith("zh-")) return String(it.llm_takeaway_zh || it.llm_takeaway || "");
+        if (isSimplifiedLangKey(langKey)) return String(it.llm_takeaway_zh || it.llm_takeaway || "");
         return String(it.llm_takeaway || it.llm_takeaway_zh || "");
       }
       return "";
@@ -6362,6 +6600,15 @@ def build_progress_html() -> str:
       if (!root) return;
       const items = Array.isArray(state.items) ? state.items : [];
       if (!items.length) {
+        if (state.routeSwitching) {
+          root.innerHTML = `
+            <div class="empty">
+              <div>${esc(state.lang === "en-US" ? "Switching page..." : "正在切换页面...")}</div>
+              <div style="margin-top:6px">${esc(state.lang === "en-US" ? "Loading latest items..." : "正在加载最新内容...")}</div>
+            </div>
+          `;
+          return;
+        }
         root.innerHTML = `
           <div class="empty">
             <div>${esc(t("empty_title"))}</div>
@@ -6428,6 +6675,7 @@ def build_progress_html() -> str:
     }
 
     async function ensureTargetTranslations() {
+      if (isOssScope()) return;
       const outputLanguage = normalizedOutputLanguage();
       const langKey = languageKeyOf(outputLanguage);
       const keys = [];
@@ -6436,13 +6684,13 @@ def build_progress_html() -> str:
         if (!key) continue;
         const i18n = (it && typeof it.i18n === "object" && it.i18n) ? it.i18n : {};
         const entry = (i18n && typeof i18n[langKey] === "object") ? i18n[langKey] : {};
-        const titleReady = langKey === "zh" || langKey.startsWith("zh-")
+        const titleReady = isSimplifiedLangKey(langKey)
           ? String(it.title_zh || "").trim()
           : String(entry?.title || "").trim();
-        const summaryReady = langKey === "zh" || langKey.startsWith("zh-")
+        const summaryReady = isSimplifiedLangKey(langKey)
           ? String(it.summary_zh || "").trim()
           : String(entry?.summary || "").trim();
-        const takeawayReady = langKey === "zh" || langKey.startsWith("zh-")
+        const takeawayReady = isSimplifiedLangKey(langKey)
           ? String(it.llm_takeaway_zh || "").trim()
           : String(entry?.llm_takeaway || "").trim();
         if (titleReady && summaryReady && takeawayReady) continue;
@@ -6470,19 +6718,62 @@ def build_progress_html() -> str:
       }
     }
 
-    async function loadSources() {
+    async function loadSources(expectedSeq = 0) {
       const data = await fetchJSON(`/api/progress/sources?scope=${encodeURIComponent(state.activeTab)}`);
+      if (expectedSeq && expectedSeq !== state.routeSeq) return;
       state.sources = Array.isArray(data.items) ? data.items : [];
       fillSourceOptions();
     }
 
-    async function refreshItems() {
-      const params = buildParams(state.query);
+    async function refreshItems(expectedSeq = 0, opts = {}) {
+      if (state.itemsLoading && !opts.force) return;
+      state.itemsLoading = true;
+      const params = buildParams(state.query, state.listLimit);
       try { window.history.replaceState(null, "", `?${params.toString()}`); } catch (_) {}
-      const data = await fetchJSON(`/api/progress?${params.toString()}`);
-      state.items = Array.isArray(data.items) ? data.items : [];
-      renderCards();
-      ensureTargetTranslations().catch(() => {});
+      try {
+        const data = await fetchJSON(`/api/progress?${params.toString()}`);
+        if (expectedSeq && expectedSeq !== state.routeSeq) return;
+        const items = Array.isArray(data.items) ? data.items : [];
+        const totalFilteredRaw = Number(data.total_filtered);
+        const totalFiltered = Number.isFinite(totalFilteredRaw) ? totalFilteredRaw : items.length;
+        state.items = items;
+        state.hasMoreItems = totalFiltered > items.length && state.listLimit < MAX_LIST_LIMIT;
+        renderCards();
+        if (!isOssScope()) {
+          ensureTargetTranslations().catch(() => {});
+        }
+      } finally {
+        state.itemsLoading = false;
+      }
+    }
+
+    function shouldLoadMoreByScroll() {
+      if (state.routeSwitching || state.itemsLoading || !state.hasMoreItems) return false;
+      const doc = document.documentElement;
+      const scrollTop = window.scrollY || doc.scrollTop || 0;
+      const viewportHeight = window.innerHeight || doc.clientHeight || 0;
+      const docHeight = Math.max(doc.scrollHeight || 0, document.body ? document.body.scrollHeight : 0);
+      return (scrollTop + viewportHeight) >= (docHeight - SCROLL_LOAD_THRESHOLD_PX);
+    }
+
+    async function loadMoreByScroll() {
+      if (!shouldLoadMoreByScroll()) return;
+      const nextLimit = Math.min(
+        MAX_LIST_LIMIT,
+        (state.listLimit || state.pageSize || PAGE_SIZE) + (state.pageSize || PAGE_SIZE),
+      );
+      if (nextLimit <= state.listLimit) return;
+      state.listLimit = nextLimit;
+      await refreshItems(state.routeSeq);
+    }
+
+    function onScrollLoadMore() {
+      if (state.scrollTicking) return;
+      state.scrollTicking = true;
+      window.requestAnimationFrame(() => {
+        state.scrollTicking = false;
+        loadMoreByScroll().catch((e) => setError(e.message || String(e)));
+      });
     }
 
     async function runFetch() {
@@ -6491,7 +6782,7 @@ def build_progress_html() -> str:
       setMessage(t("msg_fetching"));
       setFetchButtonRunning(true);
       try {
-        const maxPerSource = Number(document.getElementById("maxPerSource")?.value || 20);
+        const maxPerSource = FIXED_MAX_PER_SOURCE;
         const fetchWorkers = Number(
           document.getElementById("cfgFetchWorkers")?.value || state.pageSettings?.fetch_workers || 6
         );
@@ -6521,7 +6812,7 @@ def build_progress_html() -> str:
       setMessage("");
       try {
         const channel = String(document.getElementById("notifyChannel")?.value || state.pageSettings?.notify_channel || "feishu");
-        const pushLimit = Number(state.pageSettings?.notify_limit || 8);
+        const pushLimit = FIXED_PUSH_LIMIT;
         const payload = {
           scope: state.activeTab,
           channel,
@@ -6544,12 +6835,14 @@ def build_progress_html() -> str:
 
     async function applyFilters() {
       state.query = captureQuery();
+      resetListLimit();
       await refreshItems();
       setMessage(t("msg_filter_applied"));
     }
 
     async function clearFilters() {
       state.query = { q: "", source_id: "", region: "", event_type: "" };
+      resetListLimit();
       applyInputs(state.query);
       await refreshItems();
       setMessage(t("msg_filter_cleared"));
@@ -6575,11 +6868,9 @@ def build_progress_html() -> str:
         if (!el) return;
         el.value = (value ?? "").toString();
       };
-      set("cfgMaxPerSource", settings.max_per_source || 20);
       set("cfgFetchWorkers", settings.fetch_workers || 6);
       set("cfgNotifyChannel", settings.notify_channel || "feishu");
-      set("cfgNotifyLimit", settings.notify_limit || 8);
-      set("cfgOutputLanguage", settings.output_language || (state.lang === "en-US" ? "English" : "Chinese"));
+      set("cfgOutputLanguage", settings.output_language || "Chinese");
       set("cfgAutoEnabled", settings.auto_enabled ? "1" : "0");
       set("cfgAutoInterval", settings.auto_interval_minutes || 60);
       set("cfgAutoPushEnabled", settings.auto_push_enabled ? "1" : "0");
@@ -6604,18 +6895,16 @@ def build_progress_html() -> str:
       set("cfgEmailTo", settings.email_to || "");
       set("cfgEmailSmtpServer", settings.email_smtp_server || "smtp.qq.com");
       set("cfgEmailSmtpPort", settings.email_smtp_port || "465");
-      set("maxPerSource", settings.max_per_source || 20);
       set("notifyChannel", settings.notify_channel || "feishu");
     }
 
     function collectProgressSettingsInputs() {
+      const ossScope = isOssScope();
       return {
         scope: state.activeTab,
-        max_per_source: Number(document.getElementById("cfgMaxPerSource")?.value || 20),
         fetch_workers: Number(document.getElementById("cfgFetchWorkers")?.value || 6),
         notify_channel: String(document.getElementById("cfgNotifyChannel")?.value || "feishu"),
-        notify_limit: Number(document.getElementById("cfgNotifyLimit")?.value || 8),
-        output_language: String(document.getElementById("cfgOutputLanguage")?.value || "").trim() || (state.lang === "en-US" ? "English" : "Chinese"),
+        output_language: String(document.getElementById("cfgOutputLanguage")?.value || "").trim() || "Chinese",
         auto_enabled: String(document.getElementById("cfgAutoEnabled")?.value || "0") === "1",
         auto_interval_minutes: Number(document.getElementById("cfgAutoInterval")?.value || 60),
         auto_push_enabled: String(document.getElementById("cfgAutoPushEnabled")?.value || "0") === "1",
@@ -6628,9 +6917,9 @@ def build_progress_html() -> str:
         email_smtp_port: String(document.getElementById("cfgEmailSmtpPort")?.value || "").trim(),
         query: {
           q: String(document.getElementById("cfgQ")?.value || "").trim(),
-          source_id: String(document.getElementById("cfgSource")?.value || "").trim(),
-          region: String(document.getElementById("cfgRegion")?.value || "").trim(),
-          event_type: String(document.getElementById("cfgEventType")?.value || "").trim(),
+          source_id: ossScope ? "" : String(document.getElementById("cfgSource")?.value || "").trim(),
+          region: ossScope ? "" : String(document.getElementById("cfgRegion")?.value || "").trim(),
+          event_type: ossScope ? "" : String(document.getElementById("cfgEventType")?.value || "").trim(),
         },
         wework_msg_type: String(document.getElementById("cfgWeworkMsgType")?.value || "markdown").trim(),
         dingtalk_webhook_url: String(document.getElementById("cfgDingtalkWebhook")?.value || "").trim(),
@@ -6644,8 +6933,10 @@ def build_progress_html() -> str:
       };
     }
 
-    async function loadProgressSettings() {
+    async function loadProgressSettings(expectedSeq = 0) {
       const data = await fetchJSON(`/api/progress/settings?scope=${encodeURIComponent(state.activeTab)}`);
+      if (expectedSeq && expectedSeq !== state.routeSeq) return;
+      state.sources = Array.isArray(data.sources) ? data.sources : [];
       applyProgressSettingsInputs(data.settings || {});
       fillSourceOptions();
       const job = data.job || {};
@@ -6706,13 +6997,15 @@ def build_progress_html() -> str:
       }).join("");
     }
 
-    async function loadProgressSubscriptions() {
+    async function loadProgressSubscriptions(expectedSeq = 0) {
       const data = await fetchJSON(`/api/progress/subscriptions?scope=${encodeURIComponent(state.activeTab)}`);
+      if (expectedSeq && expectedSeq !== state.routeSeq) return;
       state.subscriptions = Array.isArray(data.items) ? data.items : [];
       renderProgressSubscriptions();
     }
 
     function collectProgressSubscriptionForm() {
+      const ossScope = isOssScope();
       return {
         scope: state.activeTab,
         name: String(document.getElementById("subName")?.value || "").trim(),
@@ -6722,15 +7015,25 @@ def build_progress_html() -> str:
         limit: Number(document.getElementById("subLimit")?.value || 20),
         filters: {
           q: String(document.getElementById("subQ")?.value || "").trim(),
-          source_id: String(document.getElementById("subSource")?.value || "").trim(),
-          region: String(document.getElementById("subRegion")?.value || "").trim(),
-          event_type: String(document.getElementById("subEventType")?.value || "").trim(),
+          source_id: ossScope ? "" : String(document.getElementById("subSource")?.value || "").trim(),
+          region: ossScope ? "" : String(document.getElementById("subRegion")?.value || "").trim(),
+          event_type: ossScope ? "" : String(document.getElementById("subEventType")?.value || "").trim(),
         },
       };
     }
 
     async function saveProgressSubscription(extra = {}) {
       const payload = { ...collectProgressSubscriptionForm(), ...extra };
+      if (isOssScope()) {
+        const filters = (payload.filters && typeof payload.filters === "object") ? payload.filters : {};
+        payload.filters = {
+          ...filters,
+          q: String(filters.q || "").trim(),
+          source_id: "",
+          region: "",
+          event_type: "",
+        };
+      }
       const data = await fetchJSON("/api/progress/subscriptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -6782,12 +7085,13 @@ def build_progress_html() -> str:
       const filters = item.filters || {};
       state.query = {
         q: String(filters.q || ""),
-        source_id: String(filters.source_id || ""),
-        region: String(filters.region || ""),
-        event_type: String(filters.event_type || ""),
+        source_id: isOssScope() ? "" : String(filters.source_id || ""),
+        region: isOssScope() ? "" : String(filters.region || ""),
+        event_type: isOssScope() ? "" : String(filters.event_type || ""),
       };
       const strategyEl = document.getElementById("subStrategy");
       if (strategyEl) strategyEl.value = String(item.strategy || "incremental");
+      resetListLimit();
       applyInputs(state.query);
       refreshItems().catch((e) => setError(e.message || String(e)));
     }
@@ -6897,6 +7201,7 @@ def build_progress_html() -> str:
       applyTheme();
       renderCards();
     });
+    window.addEventListener("scroll", onScrollLoadMore, { passive: true });
 
     applyProgressMode();
     initPageShellMotion();
@@ -6904,7 +7209,6 @@ def build_progress_html() -> str:
     (async function boot() {
       applyTheme();
       syncFromUrl();
-      await loadSources();
       await loadProgressSettings();
       await loadProgressSubscriptions();
       applyI18n();

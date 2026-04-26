@@ -46,6 +46,15 @@
       - AI_API_KEY=${AI_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-}
       - AI_API_BASE=${AI_API_BASE:-}
+      # Fast translation (non-LLM)
+      - NOTIFICATION_TRANSLATION_ENGINE=${NOTIFICATION_TRANSLATION_ENGINE:-fast}
+      - NOTIFICATION_TRANSLATION_ALLOW_LLM_FALLBACK=${NOTIFICATION_TRANSLATION_ALLOW_LLM_FALLBACK:-false}
+      - FAST_TRANSLATOR_PROVIDER=${FAST_TRANSLATOR_PROVIDER:-google}
+      - FAST_TRANSLATOR_FALLBACK_PROVIDERS=${FAST_TRANSLATOR_FALLBACK_PROVIDERS:-google,libretranslate}
+      - FAST_TRANSLATOR_TIMEOUT=${FAST_TRANSLATOR_TIMEOUT:-8}
+      - FAST_TRANSLATOR_MAX_RETRIES=${FAST_TRANSLATOR_MAX_RETRIES:-1}
+      - FAST_TRANSLATOR_LIBRE_URL=${FAST_TRANSLATOR_LIBRE_URL:-http://libretranslate:5000}
+      - FAST_TRANSLATOR_LIBRE_API_KEY=${FAST_TRANSLATOR_LIBRE_API_KEY:-}
       # Remote storage settings (S3 compatible)
       - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME:-}
@@ -56,6 +65,61 @@
       - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
       - RUN_MODE=${RUN_MODE:-panel}
       - IMMEDIATE_RUN=${IMMEDIATE_RUN:-true}
+      # Shared crontab path for centralized scheduler service
+      - PANEL_CRONTAB_PATH=${PANEL_CRONTAB_PATH:-/app/output/panel_schedule.crontab}
+
+  omnihawk-ai-scheduler:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: omnihawk-ai-scheduler
+    restart: unless-stopped
+    depends_on:
+      - omnihawk-ai
+
+    ports:
+      - "127.0.0.1:${SCHEDULER_WEBSERVER_PORT:-18081}:${SCHEDULER_WEBSERVER_PORT:-18081}"
+
+    volumes:
+      - ../config:/app/config:ro
+      - ../output:/app/output
+
+    environment:
+      - TZ=Asia/Shanghai
+      - WEBSERVER_PORT=${SCHEDULER_WEBSERVER_PORT:-18081}
+      - RUN_MODE=custom
+      - PANEL_CRONTAB_PATH=${PANEL_CRONTAB_PATH:-/app/output/panel_schedule.crontab}
+
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        set -e
+        CRON_FILE="${PANEL_CRONTAB_PATH:-/app/output/panel_schedule.crontab}"
+        mkdir -p "$$(dirname "$$CRON_FILE")"
+        if [ ! -s "$$CRON_FILE" ]; then
+          echo "*/30 * * * * cd /app && /app/.venv/bin/python -m omnihawk_ai" > "$$CRON_FILE"
+        fi
+        python manage.py start_webserver
+        exec /usr/local/bin/supercronic -passthrough-logs -inotify "$$CRON_FILE"
+
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    container_name: omnihawk-ai-libretranslate
+    profiles: ["translator"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${LIBRETRANSLATE_PORT:-15000}:5000"
+    environment:
+      - LT_LOAD_ONLY=${LT_LOAD_ONLY:-en,zh,zt,ja,ko,fr}
+      - LT_UPDATE_MODELS=${LT_UPDATE_MODELS:-false}
+      - LT_DISABLE_FILES_TRANSLATION=${LT_DISABLE_FILES_TRANSLATION:-true}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/languages', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+
   omnihawk-ai-mcp:
     build:
       context: ..
@@ -73,4 +137,5 @@
     environment:
       - TZ=Asia/Shanghai
       - MCP_PORT=${MCP_PORT:-3333}
+      - PANEL_CRONTAB_PATH=${PANEL_CRONTAB_PATH:-/app/output/panel_schedule.crontab}
 

@@ -70,4 +70,5 @@
     environment:
       - TZ=Asia/Shanghai
       - MCP_PORT=${MCP_PORT:-3333}
+      - PANEL_CRONTAB_PATH=${PANEL_CRONTAB_PATH:-/app/output/panel_schedule.crontab}
 

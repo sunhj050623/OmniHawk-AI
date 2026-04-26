@@ -29,6 +29,7 @@ from omnihawk_ai.web.panel_server import (
     PanelSettingsStore,
     PanelSubscriptionStore,
     PaperRepository,
+    ScheduleController,
     NOTIFY_CHANNELS,
     NOTIFY_CHANNEL_SET,
     PROGRESS_SCOPE_KIND_MAP,
@@ -86,6 +87,7 @@ class OmniHawkContext:
     project_root: Path
     output_dir: Path
     settings: PanelSettingsStore
+    schedule: ScheduleController
     actions: PanelActionStore
     paper_subscriptions: PanelSubscriptionStore
     progress_page_settings: ProgressPageSettingsStore
@@ -187,6 +189,7 @@ def _build_context(project_root: Optional[str] = None, output_dir: Optional[str]
     out.mkdir(parents=True, exist_ok=True)
 
     settings = PanelSettingsStore(out)
+    schedule = ScheduleController(project_root=root, output_dir=out, settings_store=settings)
     actions = PanelActionStore(out)
     paper_subscriptions = PanelSubscriptionStore(out)
     progress_page_settings = ProgressPageSettingsStore(out)
@@ -209,6 +212,7 @@ def _build_context(project_root: Optional[str] = None, output_dir: Optional[str]
         project_root=root,
         output_dir=out,
         settings=settings,
+        schedule=schedule,
         actions=actions,
         paper_subscriptions=paper_subscriptions,
         progress_page_settings=progress_page_settings,
@@ -410,10 +414,65 @@ async def save_global_settings(updates: Dict[str, Any]) -> str:
         ctx = _ensure_context()
         patch = updates if isinstance(updates, dict) else {}
         saved = ctx.settings.save(patch)
-        return {"ok": True, "settings": saved}
+        schedule = ctx.schedule.sync_command()
+        return {"ok": True, "settings": saved, "schedule": schedule}
 
     payload = await asyncio.to_thread(worker)
     return _json(payload)
+
+
+@mcp.tool
+async def get_schedule_settings() -> str:
+    """Get current scheduler settings (cron expression + parsed interval)."""
+
+    def worker() -> Dict[str, Any]:
+        ctx = _ensure_context()
+        info = ctx.schedule.current()
+        return {
+            "ok": True,
+            "schedule": info,
+            "crontab_path": str(ctx.schedule.crontab_path),
+            "schedule_state_path": str(ctx.schedule.schedule_state_path),
+        }
+
+    payload = await asyncio.to_thread(worker)
+    return _json(payload)
+
+
+@mcp.tool
+async def set_schedule_interval(interval_minutes: int) -> str:
+    """Set scheduler interval in minutes and update shared crontab."""
+
+    def worker() -> Dict[str, Any]:
+        ctx = _ensure_context()
+        try:
+            interval = int(interval_minutes)
+        except Exception:
+            return {"ok": False, "error": "interval_minutes must be an integer"}
+        info = ctx.schedule.update_interval(interval)
+        return {"ok": True, "schedule": info}
+
+    try:
+        payload = await asyncio.to_thread(worker)
+        return _json(payload)
+    except ValueError as exc:
+        return _json({"ok": False, "error": str(exc)})
+
+
+@mcp.tool
+async def set_schedule_cron(cron_expr: str) -> str:
+    """Set scheduler cron expression and update shared crontab."""
+
+    def worker() -> Dict[str, Any]:
+        ctx = _ensure_context()
+        info = ctx.schedule.update_cron_expr(str(cron_expr or "").strip())
+        return {"ok": True, "schedule": info}
+
+    try:
+        payload = await asyncio.to_thread(worker)
+        return _json(payload)
+    except ValueError as exc:
+        return _json({"ok": False, "error": str(exc)})
 
 
 @mcp.tool
@@ -1038,7 +1097,7 @@ def run_server(
     print()
     print("  Tool groups:")
     print("    - Project introspection: get_project_overview, list_pages, list_scopes")
-    print("    - Settings: get_global_settings, save_global_settings, get_scope_settings, save_scope_settings")
+    print("    - Settings: get_global_settings, save_global_settings, get_schedule_settings, set_schedule_interval, set_schedule_cron, get_scope_settings, save_scope_settings")
     print("    - Progress scope data: list_scope_sources, list_scope_items, fetch_scope_items")
     print("    - Progress subscriptions: list_scope_subscriptions, upsert_scope_subscription, delete_scope_subscription, run_scope_subscriptions")
     print("    - Paper radar: list_papers, get_paper_detail, deep_analyze_paper, set_paper_action")
