@@ -1,3 +1,15 @@
+## Language Versions (Top 10)
+- [Chinese (Simplified)](README.md)
+- [English](README-EN.md)
+- [Hindi](README-HI.md)
+- [Spanish](README-ES.md)
+- [Arabic](README-AR.md)
+- [French](README-FR.md)
+- [Portuguese](README-PT.md)
+- [Bengali](README-BN.md)
+- [Japanese](README-JA.md)
+- [Korean](README-KO.md)
+
 <div align="center">
 
 # 🦅 OmniHawk AI
@@ -76,11 +88,38 @@ AI signals are highly fragmented and move fast. Manual tracking usually breaks d
 - Multi-source ingestion with region-oriented source organization.
 - Persistent history + dedup indexes to prevent repeat fetches/pushes.
 - Recency control (for example, a 90-day window) to suppress stale items.
-- LLM summary/analysis with Chinese and English output modes.
+- Unified translation pipeline (any target language) for titles, LLM analysis, and push content.
 - Multi-channel notifications: `feishu`, `wework`, `wechat`, `telegram`, `dingtalk`, `ntfy`, `bark`, `slack`, `email`.
+- Smart push strategies: `daily` / `incremental` / `realtime`.
 - Scheduled fetching and optional auto-push subscription jobs.
 - MCP tool interface for protocol-based agent integration.
 - Agent CLI (new) for direct, scriptable local tool invocation.
+
+## 🌐 Unified Translation Pipeline (Any Target Language)
+- One pipeline across all layers: `title`, `LLM summary/analysis`, and `notification payload`.
+- Target language support: `English`, `Korean`, `Japanese`, `French`, `Chinese`, `Traditional Chinese`, plus custom language targets.
+- Cost control: batch translation, incremental field fill, and persisted reuse to avoid repeated API calls.
+- Consistent behavior: Web, MCP, and CLI share the same `output_language` semantics, so UI and push outputs stay in sync.
+
+Example (CLI):
+```bash
+# Set AI Finance page output language to Japanese
+omnihawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
+
+# Fetch using this scope and language policy
+omnihawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
+```
+
+## 🧠 Smart Push Strategy
+| Strategy | Trigger | Best For | Characteristic |
+| --- | --- | --- | --- |
+| `daily` | Daily scheduled summary | Executive/team digest | Full topic aggregation on fixed cadence |
+| `incremental` | Scheduled window, new-only | Routine monitoring | Zero-duplicate incremental delivery |
+| `realtime` | Event-triggered immediate push | Major model releases, policy breaks, funding alerts | No wait for schedule, highest timeliness |
+
+Notes:
+- Strategy is configured per subscription rule and can differ across the 6 pages.
+- Can be combined with filters (source, region, event type, keywords) for precise alert routing.
 
 ## 🧱 System Architecture
 ```text
