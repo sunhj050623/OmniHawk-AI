@@ -27,7 +27,7 @@ case "${RUN_MODE:-cron}" in
     fi
 
     # Build supercronic crontab.
-    echo "$CRON_EXPR cd /app && omnihawk-ai" > /tmp/crontab
+    echo "$CRON_EXPR cd /app && /app/.venv/bin/python -m omnihawk_ai" > /tmp/crontab
     echo "Generated crontab:"
     cat /tmp/crontab
 

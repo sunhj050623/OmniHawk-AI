@@ -27,6 +27,9 @@ TOOL_NAMES: List[str] = [
     "list_scopes",
     "get_global_settings",
     "save_global_settings",
+    "get_schedule_settings",
+    "set_schedule_interval",
+    "set_schedule_cron",
     "list_scope_sources",
     "list_scope_items",
     "fetch_scope_items",
@@ -176,6 +179,8 @@ def main() -> None:
             "  omnihawk-ai-cli call get_project_overview\n"
             "  omnihawk-ai-cli call list_scope_items --args '{\"scope\":\"market_finance\",\"limit\":20}'\n"
             "  omnihawk-ai-cli call upsert_scope_subscription --args-file ./payload.json\n"
+            "  omnihawk-ai-cli call set_schedule_interval --args '{\"interval_minutes\":20}'\n"
+            "  omnihawk-ai-cli call set_schedule_cron --args '{\"cron_expr\":\"*/15 * * * *\"}'\n"
             "  omnihawk-ai-cli --project-root . --output-dir ./output call list_papers --args '{\"limit\":5}'\n"
         ),
     )

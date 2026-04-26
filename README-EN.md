@@ -1,15 +1,3 @@
-## Language Versions (Top 10)
-- [Chinese (Simplified)](README.md)
-- [English](README-EN.md)
-- [Hindi](README-HI.md)
-- [Spanish](README-ES.md)
-- [Arabic](README-AR.md)
-- [French](README-FR.md)
-- [Portuguese](README-PT.md)
-- [Bengali](README-BN.md)
-- [Japanese](README-JA.md)
-- [Korean](README-KO.md)
-
 <div align="center">
 
 # 🦅 OmniHawk AI
@@ -51,7 +39,7 @@ fetch, dedupe, analyze, subscribe, and push from one platform, with MCP + CLI in
   <img src="image.png" alt="OmniHawk AI project banner" width="920" />
 </p>
 
-[中文](README.md) | **English**
+[中文](README.md) | **English** | [हिन्दी](README-HI.md) | [Español](README-ES.md) | [العربية](README-AR.md) | [Français](README-FR.md) | [Português](README-PT.md) | [বাংলা](README-BN.md) | [日本語](README-JA.md) | [한국어](README-KO.md)
 
 </div>
 

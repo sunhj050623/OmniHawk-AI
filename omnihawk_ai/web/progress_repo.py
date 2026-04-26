@@ -5,6 +5,7 @@ Official AI progress source ingestion for the web panel.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import html
 import json
@@ -2773,6 +2774,9 @@ class AIProgressRepository:
         self.sources = [dict(x) for x in OFFICIAL_AI_PROGRESS_SOURCES]
         self.source_by_id = {str(x.get("id", "") or "").strip(): dict(x) for x in self.sources}
         self._github_readme_cache: Dict[str, bool] = {}
+        self._cached_payload: Optional[Dict[str, Any]] = None
+        self._cached_mtime_ns: int = -1
+        self._cached_size: int = -1
 
     def _normalize_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
         source_id = str(item.get("source_id", "") or "").strip()
@@ -3127,20 +3131,52 @@ class AIProgressRepository:
     def load(self) -> Dict[str, Any]:
         with self._lock:
             if not self.path.exists():
+                self._cached_payload = None
+                self._cached_mtime_ns = -1
+                self._cached_size = -1
                 return {"items": [], "updated_at": ""}
+            try:
+                stat = self.path.stat()
+                mtime_ns = int(getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000)))
+                size = int(getattr(stat, "st_size", -1))
+            except Exception:
+                mtime_ns = -1
+                size = -1
+
+            if (
+                self._cached_payload is not None
+                and mtime_ns == self._cached_mtime_ns
+                and size == self._cached_size
+            ):
+                return copy.deepcopy(self._cached_payload)
+
             try:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
-                    return self._normalize(data)
+                    payload = data
+                else:
+                    payload = {"items": [], "updated_at": ""}
             except Exception:
-                pass
-            return {"items": [], "updated_at": ""}
+                payload = {"items": [], "updated_at": ""}
+
+            self._cached_payload = payload
+            self._cached_mtime_ns = mtime_ns
+            self._cached_size = size
+            return copy.deepcopy(payload)
 
     def save(self, data: Dict[str, Any]) -> Dict[str, Any]:
         with self._lock:
             normalized = self._normalize(data or {})
             self.output_dir.mkdir(parents=True, exist_ok=True)
             self.path.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8")
+            try:
+                stat = self.path.stat()
+                self._cached_mtime_ns = int(getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000)))
+                self._cached_size = int(getattr(stat, "st_size", -1))
+            except Exception:
+                self._cached_mtime_ns = -1
+                self._cached_size = -1
+            self._cached_payload = copy.deepcopy(normalized)
             return normalized
 
     def list_sources(self) -> List[Dict[str, Any]]:
@@ -3520,7 +3556,7 @@ class AIProgressRepository:
             summary = _normalize_text(desc_match.group(1) if desc_match else "")
             title = repo_full
 
-            tags: List[str] = ["github-trending", f"repo:{repo_full}"]
+            tags: List[str] = ["github", f"repo:{repo_full}"]
             lang_match = re.search(
                 r'itemprop=["\']programmingLanguage["\'][^>]*>\s*([^<]+)\s*<',
                 block,
@@ -3539,8 +3575,8 @@ class AIProgressRepository:
             normalized = self._normalize_item(
                 {
                     "source_id": source.get("id", ""),
-                    "source_name": source.get("name", ""),
-                    "org": source.get("org", ""),
+                    "source_name": "GitHub",
+                    "org": "GitHub",
                     "region": source.get("region", "global"),
                     "kind": source.get("kind", "oss_signal"),
                     "event_type": _infer_event_type(title, summary, str(source.get("kind", ""))),
@@ -3880,6 +3916,7 @@ class AIProgressRepository:
         if not isinstance(items, list):
             items = []
 
+        oss_only_mode = bool(kind_set) and "oss_signal" in kind_set
         filtered: List[Dict[str, Any]] = []
         for raw in items:
             if not isinstance(raw, dict):
@@ -3894,6 +3931,18 @@ class AIProgressRepository:
                 continue
             if kind_set and str(item.get("kind", "")).lower() not in kind_set:
                 continue
+            if oss_only_mode:
+                repo = self._extract_github_repo_from_url(str(item.get("url", "") or ""))
+                if not repo:
+                    continue
+                # Keep OSS scope as GitHub-only display even for historical rows.
+                item["source_name"] = "GitHub"
+                item["org"] = "GitHub"
+                tags = [str(x).strip() for x in (item.get("tags") or []) if str(x).strip()]
+                tags = [x for x in tags if x.lower() != "github-trending"]
+                if not any(x.lower() == "github" for x in tags):
+                    tags.insert(0, "github")
+                item["tags"] = tags
             if event_type and str(item.get("event_type", "")).lower() != event_type:
                 continue
             published = str(item.get("published_at", "") or "")

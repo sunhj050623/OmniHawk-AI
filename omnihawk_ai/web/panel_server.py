@@ -40,6 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 from omnihawk_ai.ai.client import AIClient
+from omnihawk_ai.translation import FastTranslator
 from omnihawk_ai.web.panel_templates import (
     build_deep_analysis_html,
     build_home_html,
@@ -54,6 +55,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INTERVAL_MINUTES = 30
 MAX_LOG_LINES = 300
 DEFAULT_PAPER_MAX_PER_RUN = 20
+DEFAULT_MAX_PER_SOURCE = 20
+DEFAULT_NOTIFY_LIMIT = 8
 DEFAULT_PRIMARY_CATEGORY = "cs.AI"
 PROGRESS_SCOPES: Tuple[str, ...] = (
     "frontier",
@@ -97,6 +100,7 @@ PROGRESS_FETCH_STALE_TIMEOUT_SECONDS = 20 * 60
 PROGRESS_FETCH_SYNC_ENRICH_LIMIT = 0
 PAPER_LIST_SYNC_ENRICH_LIMIT = 0
 PAPER_FETCH_STALE_TIMEOUT_SECONDS = 3 * 60 * 60
+CRON_EXPR_PATTERN = re.compile(r"^[0-9*/,\s-]+$")
 NOTIFY_CHANNELS: Tuple[str, ...] = (
     "feishu",
     "wework",
@@ -216,6 +220,18 @@ def interval_to_cron(interval_minutes: int) -> str:
     raise ValueError("interval_minutes must be <60, or divisible by 60")
 
 
+def normalize_cron_expr(value: Any) -> str:
+    expr = str(value or "").strip()
+    if not expr:
+        raise ValueError("cron_expr is required")
+    if not CRON_EXPR_PATTERN.fullmatch(expr):
+        raise ValueError("invalid cron_expr: only digits, spaces, '*', '/', ',', '-' are allowed")
+    parts = expr.split()
+    if len(parts) != 5:
+        raise ValueError("cron_expr must have 5 fields: minute hour day month weekday")
+    return " ".join(parts)
+
+
 def extract_arxiv_id(text: str) -> str:
     if not text:
         return ""
@@ -333,18 +349,36 @@ def normalize_analysis_language(value: Any, default: str = "Chinese") -> str:
         "zh": "Chinese",
         "zh-cn": "Chinese",
         "zh-hans": "Chinese",
+        "zh-hans-cn": "Chinese",
         "chinese": "Chinese",
+        "simplified chinese": "Chinese",
         "simplified-chinese": "Chinese",
+        "简体中文": "Chinese",
+        "簡體中文": "Chinese",
+        "中文": "Chinese",
         "zh-hant": "Traditional Chinese",
         "zh-tw": "Traditional Chinese",
         "zh-hk": "Traditional Chinese",
+        "traditional chinese": "Traditional Chinese",
         "traditional-chinese": "Traditional Chinese",
+        "繁体中文": "Traditional Chinese",
+        "繁體中文": "Traditional Chinese",
         "ko": "Korean",
         "korean": "Korean",
+        "한국어": "Korean",
+        "韩语": "Korean",
+        "韓語": "Korean",
         "ja": "Japanese",
         "japanese": "Japanese",
+        "日本語": "Japanese",
+        "日本语": "Japanese",
+        "日语": "Japanese",
+        "日語": "Japanese",
         "fr": "French",
         "french": "French",
+        "français": "French",
+        "法语": "French",
+        "法語": "French",
     }
     fallback = str(default or "").strip()
     raw = str(value or "").strip()
@@ -385,6 +419,14 @@ def language_cache_key(value: Any) -> str:
 
 def is_english_language(value: Any) -> bool:
     return language_cache_key(value) == "en"
+
+
+def is_simplified_chinese_language(value: Any) -> bool:
+    return language_cache_key(value) == "zh"
+
+
+def is_traditional_chinese_language(value: Any) -> bool:
+    return language_cache_key(value) == "zh-hant"
 
 
 def is_chinese_language(value: Any) -> bool:
@@ -626,10 +668,10 @@ class PanelSettingsStore:
             "email_smtp_server": "smtp.qq.com",
             "email_smtp_port": "465",
             # Unified page settings union fields (paper page keeps independent values).
-            "max_per_source": 20,
+            "max_per_source": DEFAULT_MAX_PER_SOURCE,
             "source_ids": [],
             "notify_channel": NOTIFY_CHANNEL_DEFAULT,
-            "notify_limit": 8,
+            "notify_limit": DEFAULT_NOTIFY_LIMIT,
             "query": {
                 "q": "",
                 "author": "",
@@ -693,7 +735,8 @@ class PanelSettingsStore:
         merged["email_to"] = str(merged.get("email_to", "") or "").strip()
         merged["email_smtp_server"] = str(merged.get("email_smtp_server", "") or "").strip() or "smtp.qq.com"
         merged["email_smtp_port"] = str(merged.get("email_smtp_port", "") or "").strip() or "465"
-        merged["max_per_source"] = parse_int_value(merged.get("max_per_source"), 1, 120) or 20
+        # Keep these knobs fixed to simplify panel settings UX.
+        merged["max_per_source"] = DEFAULT_MAX_PER_SOURCE
         source_ids_raw = merged.get("source_ids")
         source_ids: List[str] = []
         if isinstance(source_ids_raw, list):
@@ -703,7 +746,7 @@ class PanelSettingsStore:
                     source_ids.append(text)
         merged["source_ids"] = source_ids
         merged["notify_channel"] = normalize_notify_channel(merged.get("notify_channel"))
-        merged["notify_limit"] = parse_int_value(merged.get("notify_limit"), 1, 30) or 8
+        merged["notify_limit"] = DEFAULT_NOTIFY_LIMIT
         merged["query"] = normalize_panel_filters(
             merged.get("query") if isinstance(merged.get("query"), dict) else {}
         )
@@ -718,11 +761,7 @@ class PanelSettingsStore:
         )
         merged["auto_push_enabled"] = bool(parse_bool_text(merged.get("auto_push_enabled"), False))
 
-        try:
-            max_run = int(merged.get("paper_max_papers_per_run") or DEFAULT_PAPER_MAX_PER_RUN)
-        except Exception:
-            max_run = DEFAULT_PAPER_MAX_PER_RUN
-        merged["paper_max_papers_per_run"] = max(1, min(max_run, 200))
+        merged["paper_max_papers_per_run"] = DEFAULT_PAPER_MAX_PER_RUN
         merged["hide_unanalyzed"] = bool(merged.get("hide_unanalyzed", True))
         return merged
 
@@ -1195,11 +1234,11 @@ class ProgressPageSettingsStore:
     def _default_scope_settings(self, scope: str) -> Dict[str, Any]:
         return {
             "scope": scope,
-            "max_per_source": 20,
+            "max_per_source": DEFAULT_MAX_PER_SOURCE,
             "fetch_workers": 6,
             "source_ids": [],
             "notify_channel": NOTIFY_CHANNEL_DEFAULT,
-            "notify_limit": 8,
+            "notify_limit": DEFAULT_NOTIFY_LIMIT,
             "output_language": "Chinese",
             "feishu_webhook_url": "",
             "wework_webhook_url": "",
@@ -1235,7 +1274,8 @@ class ProgressPageSettingsStore:
     def _normalize_scope_settings(self, scope: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         base = self._default_scope_settings(scope)
         incoming = payload if isinstance(payload, dict) else {}
-        base["max_per_source"] = parse_int_value(incoming.get("max_per_source"), 1, 120) or 20
+        # Keep these knobs fixed to simplify page settings UX.
+        base["max_per_source"] = DEFAULT_MAX_PER_SOURCE
         base["fetch_workers"] = parse_int_value(incoming.get("fetch_workers"), 1, 16) or 6
         source_ids_raw = incoming.get("source_ids")
         source_ids: List[str] = []
@@ -1246,7 +1286,7 @@ class ProgressPageSettingsStore:
                     source_ids.append(text)
         base["source_ids"] = source_ids
         base["notify_channel"] = normalize_notify_channel(incoming.get("notify_channel"))
-        base["notify_limit"] = parse_int_value(incoming.get("notify_limit"), 1, 30) or 8
+        base["notify_limit"] = DEFAULT_NOTIFY_LIMIT
         base["output_language"] = normalize_analysis_language(incoming.get("output_language", "Chinese"), default="Chinese")
         base["feishu_webhook_url"] = str(incoming.get("feishu_webhook_url", "") or "").strip()
         base["wework_webhook_url"] = str(incoming.get("wework_webhook_url", "") or "").strip()
@@ -2342,7 +2382,9 @@ class ScheduleController:
         self.project_root = project_root
         self.output_dir = (output_dir or (project_root / "output")).resolve()
         self.settings_store = settings_store
-        self.crontab_path = Path("/tmp/crontab")
+        self.crontab_path = Path(
+            os.getenv("PANEL_CRONTAB_PATH", "/tmp/crontab") or "/tmp/crontab"
+        )
         self.schedule_state_path = self.output_dir / "panel_schedule.json"
         self.command = self._build_command_from_settings()
         self._lock = threading.Lock()
@@ -2351,6 +2393,14 @@ class ScheduleController:
         settings = self.settings_store.load() if self.settings_store else {}
         ai_model_raw = str(settings.get("ai_model", "") or "").strip()
         ai_api_base = str(settings.get("ai_api_base", "") or "").strip()
+        python_bin = str(os.getenv("PANEL_SCHEDULE_PYTHON", "") or "").strip()
+        if not python_bin:
+            docker_venv_python = Path("/app/.venv/bin/python")
+            if docker_venv_python.exists():
+                python_bin = str(docker_venv_python)
+            else:
+                python_bin = str(sys.executable or "python")
+        python_cmd = shlex.quote(python_bin)
         # Panel mode only keeps paper subscription notifications.
         # Disable legacy hotlist notification chain and hotlist crawler for scheduled crawls.
         env_parts: List[str] = [
@@ -2395,8 +2445,8 @@ class ScheduleController:
             env_parts.append(f"PAPER_ANALYSIS_MAX_PAPERS_PER_RUN={paper_max}")
 
         if env_parts:
-            return f"cd /app && {' '.join(env_parts)} python -m omnihawk_ai"
-        return "cd /app && python -m omnihawk_ai"
+            return f"cd /app && {' '.join(env_parts)} {python_cmd} -m omnihawk_ai"
+        return f"cd /app && {python_cmd} -m omnihawk_ai"
 
     def _load_saved_cron(self) -> str:
         if not self.schedule_state_path.exists():
@@ -2405,8 +2455,8 @@ class ScheduleController:
             data = json.loads(self.schedule_state_path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 cron_expr = str(data.get("cron_expr", "") or "").strip()
-                if cron_expr and len(cron_expr.split()) == 5:
-                    return cron_expr
+                if cron_expr:
+                    return normalize_cron_expr(cron_expr)
         except Exception:
             pass
         return ""
@@ -2458,6 +2508,15 @@ class ScheduleController:
             self.crontab_path.write_text(line, encoding="utf-8")
             self._save_cron(cron_expr)
         return {"cron_expr": cron_expr, "interval_minutes": interval_minutes}
+
+    def update_cron_expr(self, cron_expr: str) -> Dict[str, Any]:
+        safe_expr = normalize_cron_expr(cron_expr)
+        with self._lock:
+            self.command = self._build_command_from_settings()
+            line = f"{safe_expr} {self.command}\n"
+            self.crontab_path.write_text(line, encoding="utf-8")
+            self._save_cron(safe_expr)
+        return {"cron_expr": safe_expr, "interval_minutes": parse_interval_from_cron(safe_expr)}
 
     def sync_command(self) -> Dict[str, Any]:
         with self._lock:
@@ -2821,7 +2880,7 @@ class PaperRepository:
             if base and not looks_like_chinese_text(base):
                 return base
             return base
-        if is_chinese_language(lang):
+        if is_simplified_chinese_language(lang):
             if title_zh:
                 return title_zh
             if base and looks_like_chinese_text(base):
@@ -2845,7 +2904,7 @@ class PaperRepository:
             if base and not looks_like_chinese_text(base):
                 return base
             return ""
-        if is_chinese_language(lang):
+        if is_simplified_chinese_language(lang):
             if zh_val:
                 return zh_val
             if base and looks_like_chinese_text(base):
@@ -2869,7 +2928,7 @@ class PaperRepository:
             if base_vals and not any(looks_like_chinese_text(x) for x in base_vals):
                 return base_vals
             return []
-        if is_chinese_language(lang):
+        if is_simplified_chinese_language(lang):
             if zh_vals:
                 return zh_vals
             if base_vals and any(looks_like_chinese_text(x) for x in base_vals):
@@ -2894,12 +2953,12 @@ class PaperRepository:
                 if is_english_language(deep_lang):
                     return deep_default
             return {}
-        if is_chinese_language(lang):
+        if is_simplified_chinese_language(lang):
             if deep_zh:
                 return deep_zh
             if isinstance(deep_default, dict) and deep_default:
                 deep_lang = normalize_analysis_language(deep_default.get("language", ""), default="")
-                if is_chinese_language(deep_lang):
+                if is_simplified_chinese_language(deep_lang):
                     return deep_default
             return {}
         if isinstance(deep_default, dict) and deep_default:
@@ -3407,6 +3466,7 @@ class PaperRepository:
             return {
                 "db_path": "",
                 "papers": [],
+                "total_filtered": 0,
                 "stats": {
                     "mode": view_mode,
                     "sort_by": sort_mode,
@@ -3467,7 +3527,9 @@ class PaperRepository:
 
         papers: List[Dict[str, Any]] = []
         seen_keys = set()
-        aff_lookup_budget = 2
+        # Keep list API fast: avoid remote affiliation lookups unless user
+        # explicitly filters by affiliation.
+        aff_lookup_budget = 2 if search_affiliation else 0
         stats = {
             "mode": view_mode,
             "sort_by": sort_mode,
@@ -3764,6 +3826,7 @@ class PaperRepository:
             )
         papers.sort(key=key_fn, reverse=reverse_sort)
 
+        total_filtered = len(papers)
         papers = papers[: max(1, min(limit, 500))]
         for paper in papers:
             paper.pop("_published_ts", None)
@@ -3771,8 +3834,14 @@ class PaperRepository:
             paper.pop("_history_key", None)
             if not include_internal:
                 paper.pop("_db_path", None)
+        stats["total_filtered"] = total_filtered
         stats["returned"] = len(papers)
-        return {"db_path": str(latest_db_path), "papers": papers, "stats": stats}
+        return {
+            "db_path": str(latest_db_path),
+            "papers": papers,
+            "total_filtered": total_filtered,
+            "stats": stats,
+        }
 
 
 class DeepAnalysisService:
@@ -4528,7 +4597,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         def pick(name: str, default: str = "") -> str:
             return str((params.get(name) or [default])[0] or default).strip()
 
-        limit = parse_int_value(pick("limit", "100"), 1, 500) or 100
+        limit = parse_int_value(pick("limit", "20"), 1, 500) or 20
         mode = pick("mode", "all")
         sort_by = pick("sort_by", "") or pick("sort", "score")
         sort_order = pick("sort_order", "desc")
@@ -4566,7 +4635,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         def pick(name: str, default: str = "") -> str:
             return str((params.get(name) or [default])[0] or default).strip()
 
-        limit = parse_int_value(pick("limit", "200"), 1, 500) or 200
+        limit = parse_int_value(pick("limit", "20"), 1, 500) or 20
         sort_by = pick("sort_by", "time")
         sort_order = pick("sort_order", "desc")
         return {
@@ -4586,21 +4655,84 @@ class DashboardHandler(BaseHTTPRequestHandler):
         key = normalize_progress_scope(scope, default="frontier")
         return str(PROGRESS_SCOPE_KIND_MAP.get(key, PROGRESS_SCOPE_KIND_MAP["frontier"]))
 
+    @staticmethod
+    def _is_github_source_for_oss(source: Dict[str, Any]) -> bool:
+        if str(source.get("kind", "") or "").strip().lower() != "oss_signal":
+            return False
+        feed_type = str(source.get("feed_type", "") or "").strip().lower()
+        if "github" in feed_type:
+            return True
+        for field in ("id", "name", "org", "homepage", "feed_url"):
+            text = str(source.get(field, "") or "").strip().lower()
+            if "github" in text:
+                return True
+        return False
+
+    def _filter_progress_sources_for_scope(
+        self,
+        scope: str,
+        all_sources: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        scope_key = normalize_progress_scope(scope, default="frontier")
+        allowed_kinds = {
+            x.strip().lower()
+            for x in self._progress_kind_for_scope(scope_key).split(",")
+            if x.strip()
+        }
+        scoped = [
+            row
+            for row in (all_sources or [])
+            if str(row.get("kind", "") or "").strip().lower() in allowed_kinds
+        ]
+        if scope_key != "oss_signal":
+            return scoped
+
+        github_candidates = [row for row in scoped if self._is_github_source_for_oss(row)]
+        if not github_candidates:
+            return []
+
+        by_id = {
+            str(row.get("id", "") or "").strip(): row
+            for row in github_candidates
+            if str(row.get("id", "") or "").strip()
+        }
+        preferred_ids = (
+            "github_trending_weekly",
+            "github_trending_daily",
+            "github_trending_weekly_en",
+        )
+        selected: List[Dict[str, Any]] = []
+        for source_id in preferred_ids:
+            row = by_id.get(source_id)
+            if row:
+                selected = [row]
+                break
+        if not selected:
+            selected = [github_candidates[0]]
+
+        normalized: List[Dict[str, Any]] = []
+        for row in selected:
+            item = dict(row)
+            item["name"] = "GitHub"
+            item["org"] = "GitHub"
+            normalized.append(item)
+        return normalized
+
     def _resolve_progress_source_ids(self, scope: str, requested_ids: List[str]) -> List[str]:
-        kind_text = self._progress_kind_for_scope(scope)
-        allowed_kinds = {x.strip().lower() for x in kind_text.split(",") if x.strip()}
-        sources = self.progress.list_sources()
+        sources = self._filter_progress_sources_for_scope(scope, self.progress.list_sources())
         allowed_source_ids = [
             str(row.get("id", "") or "").strip()
             for row in sources
             if str(row.get("id", "") or "").strip()
-            and str(row.get("kind", "") or "").strip().lower() in allowed_kinds
         ]
         if not requested_ids:
             return allowed_source_ids
         requested = [str(x).strip() for x in requested_ids if str(x).strip()]
         allowed_set = set(allowed_source_ids)
-        return [x for x in requested if x in allowed_set]
+        matched = [x for x in requested if x in allowed_set]
+        if matched:
+            return matched
+        return allowed_source_ids
 
     def _scope_progress_settings(self, scope: str) -> Dict[str, Any]:
         return self.progress_page_settings.get_scope(scope)
@@ -4735,6 +4867,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         settings = self._progress_notify_settings(scope)
         msg_text = self._build_progress_payload_text(
             selected_items,
+            scope=scope,
             strategy=strategy,
             output_language=output_language,
         )
@@ -4905,15 +5038,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if mapped:
             return mapped
         if field == "title":
-            if is_chinese_language(lang):
+            if is_simplified_chinese_language(lang):
                 return str(item.get("title_zh", "") or item.get("title", "") or "").strip()
             return str(item.get("title", "") or item.get("title_zh", "") or "").strip()
         if field == "summary":
-            if is_chinese_language(lang):
+            if is_simplified_chinese_language(lang):
                 return str(item.get("summary_zh", "") or item.get("summary", "") or "").strip()
             return str(item.get("summary", "") or item.get("summary_zh", "") or "").strip()
         if field == "llm_takeaway":
-            if is_chinese_language(lang):
+            if is_simplified_chinese_language(lang):
                 return str(item.get("llm_takeaway_zh", "") or item.get("llm_takeaway", "") or "").strip()
             return str(item.get("llm_takeaway", "") or item.get("llm_takeaway_zh", "") or "").strip()
         return ""
@@ -4921,6 +5054,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _build_progress_payload_text(
         self,
         items: List[Dict[str, Any]],
+        scope: str = "frontier",
         strategy: str = SUBSCRIPTION_STRATEGY_DEFAULT,
         output_language: str = "Chinese",
     ) -> str:
@@ -4940,8 +5074,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         lines: List[str] = []
         total = len(items)
+        scope_key = normalize_progress_scope(scope, default="frontier")
+        scope_title = PROGRESS_SCOPE_NAME_MAP_ZH.get(scope_key, "AI资讯")
         strategy_key = normalize_subscription_strategy(strategy, default=SUBSCRIPTION_STRATEGY_DEFAULT)
-        lines.append(f"AI 技术进展 · {subscription_strategy_label(strategy_key)} · 命中 {total} 条")
+        lines.append(f"{scope_title} · {subscription_strategy_label(strategy_key)} · 命中 {total} 条")
         lines.append("")
 
         max_items = 8
@@ -4983,7 +5119,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             lines.append("")
 
         if total > max_items:
-            lines.append(f"其余 {total - max_items} 条请在 AI 技术进展面板查看。")
+            lines.append(f"其余 {total - max_items} 条请在 {scope_title} 面板查看。")
         lines.append(f"推送时间: {utc_now_iso()}")
         return "\n".join(lines).strip() + "\n"
 
@@ -5047,6 +5183,150 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "NUM_RETRIES": 0,
         }
 
+    def _build_fast_translator(self, settings: Dict[str, Any]) -> FastTranslator:
+        conf = settings if isinstance(settings, dict) else {}
+        engine = str(
+            conf.get("notification_translation_engine")
+            or os.environ.get("NOTIFICATION_TRANSLATION_ENGINE")
+            or "fast"
+        ).strip().lower()
+        provider = str(
+            conf.get("fast_translator_provider")
+            or os.environ.get("FAST_TRANSLATOR_PROVIDER")
+            or ""
+        ).strip().lower()
+        if engine in {"google", "libretranslate"}:
+            provider = engine
+        if provider not in {"google", "libretranslate"}:
+            provider = "google"
+        return FastTranslator.from_settings(conf, provider=provider)
+
+    def _fast_translate_text(self, translator: FastTranslator, value: Any, target_language: str) -> str:
+        source = str(value or "").strip()
+        if not source:
+            return ""
+        try:
+            translated = str(
+                translator.translate_text(source, target_language=target_language)
+                or ""
+            ).strip()
+            return translated or source
+        except Exception:
+            return source
+
+    def _translate_single_paper_record_with_fast(
+        self,
+        record: Dict[str, Any],
+        target_language: str,
+        translator: FastTranslator,
+        include_deep: bool = False,
+    ) -> Dict[str, Any]:
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        lang_key = language_cache_key(lang)
+        insight = record.get("insight") if isinstance(record.get("insight"), dict) else {}
+
+        def pick_text(*candidates: Any) -> str:
+            for candidate in candidates:
+                text = str(candidate or "").strip()
+                if text:
+                    return text
+            return ""
+
+        title_source = pick_text(
+            record.get("title"),
+            insight.get("title_zh"),
+            insight.get("title_en"),
+        )
+        one_sentence_source = pick_text(
+            insight.get("one_sentence_summary"),
+            insight.get("summary"),
+            insight.get("one_sentence_summary_zh"),
+            insight.get("one_sentence_summary_en"),
+        )
+        method_source = pick_text(insight.get("method"), insight.get("method_zh"), insight.get("method_en"))
+        conclusion_source = pick_text(
+            insight.get("conclusion"),
+            insight.get("findings"),
+            insight.get("conclusion_zh"),
+            insight.get("conclusion_en"),
+        )
+        innovation_source = pick_text(
+            insight.get("innovation"),
+            insight.get("novelty"),
+            insight.get("innovation_zh"),
+            insight.get("innovation_en"),
+        )
+        keywords_source = self._normalize_keyword_values(
+            insight.get("keywords")
+            or insight.get("keywords_zh")
+            or insight.get("keywords_en")
+        )
+
+        title_val = self._fast_translate_text(translator, title_source, lang)
+        one_line_val = self._fast_translate_text(translator, one_sentence_source, lang)
+        method_val = self._fast_translate_text(translator, method_source, lang)
+        conclusion_val = self._fast_translate_text(translator, conclusion_source, lang)
+        innovation_val = self._fast_translate_text(translator, innovation_source, lang)
+        keywords_val = [
+            self._fast_translate_text(translator, keyword, lang)
+            for keyword in keywords_source[:12]
+            if str(keyword or "").strip()
+        ]
+        keywords_val = [x for x in keywords_val if x]
+
+        if not any([title_val, one_line_val, method_val, conclusion_val, innovation_val, keywords_val]):
+            return {}
+
+        updates: Dict[str, Any] = {}
+        if is_english_language(lang):
+            if title_val:
+                updates["title_en"] = title_val
+            if one_line_val:
+                updates["one_sentence_summary_en"] = one_line_val
+            if method_val:
+                updates["method_en"] = method_val
+            if conclusion_val:
+                updates["conclusion_en"] = conclusion_val
+            if innovation_val:
+                updates["innovation_en"] = innovation_val
+            if keywords_val:
+                updates["keywords_en"] = keywords_val
+        elif is_simplified_chinese_language(lang):
+            if title_val:
+                updates["title_zh"] = title_val
+            if one_line_val:
+                updates["one_sentence_summary_zh"] = one_line_val
+            if method_val:
+                updates["method_zh"] = method_val
+            if conclusion_val:
+                updates["conclusion_zh"] = conclusion_val
+            if innovation_val:
+                updates["innovation_zh"] = innovation_val
+            if keywords_val:
+                updates["keywords_zh"] = keywords_val
+        else:
+            i18n_payload: Dict[str, Any] = {}
+            if title_val:
+                i18n_payload["title"] = title_val
+            if one_line_val:
+                i18n_payload["one_sentence_summary"] = one_line_val
+            if method_val:
+                i18n_payload["method"] = method_val
+            if conclusion_val:
+                i18n_payload["conclusion"] = conclusion_val
+            if innovation_val:
+                i18n_payload["innovation"] = innovation_val
+            if keywords_val:
+                i18n_payload["keywords"] = keywords_val
+            if i18n_payload:
+                updates["i18n"] = {lang_key: i18n_payload}
+
+        if include_deep:
+            # Fast translator fallback currently only covers card shallow fields.
+            pass
+
+        return updates
+
     def _paper_item_needs_language(
         self,
         insight: Dict[str, Any],
@@ -5079,7 +5359,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             localized_conclusion = str(insight.get("conclusion_en", "") or "").strip()
             localized_innovation = str(insight.get("innovation_en", "") or "").strip()
             localized_keywords = self._normalize_keyword_values(insight.get("keywords_en"))
-        elif is_chinese_language(lang):
+        elif is_simplified_chinese_language(lang):
             localized_title = str(insight.get("title_zh", "") or "").strip()
             localized_one_line = str(insight.get("one_sentence_summary_zh", "") or "").strip()
             localized_method = str(insight.get("method_zh", "") or "").strip()
@@ -5108,7 +5388,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             keywords_ready = bool(localized_keywords) or bool(
                 raw_keywords and not any(looks_like_chinese_text(val) for val in raw_keywords)
             )
-        elif is_chinese_language(lang):
+        elif is_simplified_chinese_language(lang):
             title_ready = bool(localized_title) or bool(raw_title and looks_like_chinese_text(raw_title))
             one_line_ready = bool(localized_one_line) or bool(raw_one_line and looks_like_chinese_text(raw_one_line))
             method_ready = bool(localized_method) or bool(raw_method and looks_like_chinese_text(raw_method))
@@ -5136,7 +5416,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         deep_ready = False
         if is_english_language(lang):
             deep_ready = isinstance(insight.get("deep_analysis_en"), dict) and bool(insight.get("deep_analysis_en"))
-        elif is_chinese_language(lang):
+        elif is_simplified_chinese_language(lang):
             deep_ready = isinstance(insight.get("deep_analysis_zh"), dict) and bool(insight.get("deep_analysis_zh"))
         else:
             deep_ready = bool(self._paper_deep_i18n_entry(insight, lang))
@@ -5157,7 +5437,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             existing_target = insight.get("deep_analysis_en") if isinstance(insight.get("deep_analysis_en"), dict) else {}
             if existing_target:
                 return {}, False
-        elif is_chinese_language(lang):
+        elif is_simplified_chinese_language(lang):
             existing_target = insight.get("deep_analysis_zh") if isinstance(insight.get("deep_analysis_zh"), dict) else {}
             if existing_target:
                 return {}, False
@@ -5175,7 +5455,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             opposite_deep = insight.get("deep_analysis_zh") if isinstance(insight.get("deep_analysis_zh"), dict) else {}
             if opposite_deep:
                 return opposite_deep, True
-        elif is_chinese_language(lang):
+        elif is_simplified_chinese_language(lang):
             opposite_deep = insight.get("deep_analysis_en") if isinstance(insight.get("deep_analysis_en"), dict) else {}
             if opposite_deep:
                 return opposite_deep, True
@@ -5196,7 +5476,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         client_config: Dict[str, Any],
     ) -> Dict[str, Any]:
         lang = normalize_analysis_language(target_language, default="Chinese")
-        suffix = "en" if is_english_language(lang) else ("zh" if is_chinese_language(lang) else "")
+        suffix = "en" if is_english_language(lang) else ("zh" if is_simplified_chinese_language(lang) else "")
         lang_key = language_cache_key(lang)
         insight = record.get("insight") if isinstance(record.get("insight"), dict) else {}
         meta = record.get("meta") if isinstance(record.get("meta"), dict) else {}
@@ -5253,7 +5533,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not title_val:
             if is_english_language(lang) and raw_title and not looks_like_chinese_text(raw_title):
                 title_val = raw_title
-            elif is_chinese_language(lang) and raw_title and looks_like_chinese_text(raw_title):
+            elif is_simplified_chinese_language(lang) and raw_title and looks_like_chinese_text(raw_title):
                 title_val = raw_title
             elif raw_title:
                 title_val = raw_title
@@ -5400,7 +5680,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             "innovation_en": innovation_val,
                             "keywords_en": keywords_val,
                         }
-                    elif is_chinese_language(lang):
+                    elif is_simplified_chinese_language(lang):
                         patch = {
                             "title_zh": title_val,
                             "one_sentence_summary_zh": one_line_val,
@@ -5495,7 +5775,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 existing_target_deep = (
                     insight.get(target_key) if isinstance(insight.get(target_key), dict) else {}
                 )
-            elif is_chinese_language(lang):
+            elif is_simplified_chinese_language(lang):
                 target_key = "deep_analysis_zh"
                 existing_target_deep = (
                     insight.get(target_key) if isinstance(insight.get(target_key), dict) else {}
@@ -5518,6 +5798,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         else:
                             updates["deep_analysis_i18n"] = {lang_key: translated_deep}
         return updates
+
 
     def _translate_paper_items(
         self,
@@ -5548,7 +5829,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         settings = self.settings.load()
         client_config = self._build_paper_llm_client_config(settings)
-        if not client_config:
+        if include_deep and not client_config:
             if allow_skip_unconfigured:
                 return {
                     "ok": True,
@@ -5558,9 +5839,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "translated_keys": [],
                     "failed": [],
                     "skipped": True,
-                    "reason": "LLM 未配置，跳过论文多语言富化",
+                    "reason": "deep analysis translation requires LLM",
+                    "output_language": target_language,
+                    "include_deep": bool(include_deep),
                 }
-            return {"ok": False, "error": "LLM 未配置，无法执行论文多语言富化"}
+            return {"ok": False, "error": "deep analysis translation requires LLM"}
 
         records = self.papers.get_paper_records_by_keys(unique_keys)
         pending: List[Tuple[str, Dict[str, Any]]] = []
@@ -5593,17 +5876,50 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         translated_patches: Dict[str, Dict[str, Any]] = {}
         worker_count = max(1, min(int(max_workers or 2), 2))
-        if pending:
-            if (not include_deep) and (not is_english_language(target_language)) and (not is_chinese_language(target_language)):
+        if pending and not include_deep:
+            translator = self._build_fast_translator(settings)
+            fast_succeeded: set[str] = set()
+            for key, record in pending:
+                try:
+                    patch = self._translate_single_paper_record_with_fast(
+                        record=record,
+                        target_language=target_language,
+                        translator=translator,
+                        include_deep=False,
+                    )
+                    if patch:
+                        translated_patches[key] = patch
+                        fast_succeeded.add(key)
+                    else:
+                        skipped += 1
+                except Exception as exc:
+                    failed.append({"key": key, "error": f"fast translate failed: {type(exc).__name__}: {exc}"})
+            if fast_succeeded:
+                failed = [
+                    item
+                    for item in failed
+                    if str(item.get("key", "") or "").strip() not in fast_succeeded
+                ]
+
+        remaining_pending = [(key, record) for key, record in pending if key not in translated_patches]
+        if remaining_pending and client_config:
+            if (not include_deep) and (not is_english_language(target_language)) and (not is_simplified_chinese_language(target_language)):
                 batch_patches, batch_failed = self._batch_translate_paper_shallow_with_llm(
-                    pending=pending,
+                    pending=remaining_pending,
                     target_language=target_language,
                     client_config=client_config,
                 )
-                translated_patches.update(batch_patches)
+                if batch_patches:
+                    llm_keys = set(batch_patches.keys())
+                    translated_patches.update(batch_patches)
+                    failed = [
+                        item
+                        for item in failed
+                        if str(item.get("key", "") or "").strip() not in llm_keys
+                    ]
                 failed.extend(batch_failed)
                 failed_key_set = {str(x.get("key", "") or "").strip() for x in batch_failed if isinstance(x, dict)}
-                for key, _record in pending:
+                for key, _record in remaining_pending:
                     if key in translated_patches or key in failed_key_set:
                         continue
                     skipped += 1
@@ -5618,14 +5934,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             include_deep,
                             force,
                         ): key
-                        for key, record in pending
+                        for key, record in remaining_pending
                     }
+                    llm_succeeded: set[str] = set()
                     for future in as_completed(future_map):
                         key = future_map[future]
                         try:
                             patch = future.result()
                             if patch:
                                 translated_patches[key] = patch
+                                llm_succeeded.add(key)
                             else:
                                 skipped += 1
                         except json.JSONDecodeError:
@@ -5634,11 +5952,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             with self.paper_enrich_retry_lock:
                                 self.paper_enrich_retry_after[retry_key_of(key)] = time.time() + 300
                         except Exception as exc:
-                            error_msg = f"LLM 调用失败: {type(exc).__name__}: {exc}"
+                            error_msg = f"LLM call failed: {type(exc).__name__}: {exc}"
                             failed.append({"key": key, "error": error_msg})
                             cooldown = 900 if "timeout" in error_msg.lower() else 300
                             with self.paper_enrich_retry_lock:
                                 self.paper_enrich_retry_after[retry_key_of(key)] = time.time() + cooldown
+                    if llm_succeeded:
+                        failed = [
+                            item
+                            for item in failed
+                            if str(item.get("key", "") or "").strip() not in llm_succeeded
+                        ]
 
         changed = 0
         translated_keys: List[str] = []
@@ -5728,7 +6052,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if force:
             return True
         lang = normalize_analysis_language(target_language, default="Chinese")
-        if is_chinese_language(lang):
+        if is_simplified_chinese_language(lang):
             return not (
                 str(row.get("title_zh", "") or "").strip()
                 and str(row.get("summary_zh", "") or "").strip()
@@ -5748,6 +6072,51 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 and str(row.get("llm_takeaway", "") or "").strip()
             )
         return True
+
+    def _enrich_progress_items_batch_with_fast(
+        self,
+        pending_rows: List[Tuple[str, Dict[str, Any]]],
+        target_language: str,
+        settings: Dict[str, Any],
+    ) -> Tuple[Dict[str, Dict[str, str]], List[Dict[str, str]]]:
+        lang = normalize_analysis_language(target_language, default="Chinese")
+        lang_key = language_cache_key(lang)
+        if not pending_rows:
+            return {}, []
+        translator = self._build_fast_translator(settings)
+        translated: Dict[str, Dict[str, str]] = {}
+        failed: List[Dict[str, str]] = []
+
+        for key, row in pending_rows:
+            title_src = str(row.get("title", "") or row.get("title_zh", "") or "").strip()
+            summary_src = str(row.get("summary", "") or row.get("summary_zh", "") or "").strip()
+            takeaway_src = str(row.get("llm_takeaway", "") or row.get("llm_takeaway_zh", "") or "").strip()
+            if not (title_src or summary_src or takeaway_src):
+                failed.append({"key": key, "error": "empty source fields"})
+                continue
+
+            title_val = self._fast_translate_text(translator, title_src, lang)
+            summary_val = self._fast_translate_text(translator, summary_src, lang)
+            takeaway_val = self._fast_translate_text(translator, takeaway_src, lang)
+            if not (title_val or summary_val or takeaway_val):
+                failed.append({"key": key, "error": "empty translated fields"})
+                continue
+
+            patch: Dict[str, str] = {
+                "language": lang,
+                "output_language": lang,
+                "title": title_val,
+                "summary": summary_val,
+                "llm_takeaway": takeaway_val,
+                "lang": lang_key,
+            }
+            if is_simplified_chinese_language(lang):
+                patch["title_zh"] = title_val
+                patch["summary_zh"] = summary_val
+                patch["llm_takeaway_zh"] = takeaway_val
+            translated[key] = patch
+
+        return translated, failed
 
     def _enrich_progress_items_batch_with_llm(
         self,
@@ -5837,7 +6206,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         "summary": summary_val,
                         "llm_takeaway": takeaway_val,
                     }
-                    if is_chinese_language(lang):
+                    if is_simplified_chinese_language(lang):
                         patch["title_zh"] = title_val
                         patch["summary_zh"] = summary_val
                         patch["llm_takeaway_zh"] = takeaway_val
@@ -5848,6 +6217,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     failed.append({"key": key, "error": f"LLM 调用失败: {type(exc).__name__}: {exc}"})
 
         return translated, failed
+
 
     def _translate_progress_items(
         self,
@@ -5865,20 +6235,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         settings = self.settings.load()
         client_config = self._build_progress_llm_client_config(settings)
-        if not client_config:
-            if allow_skip_unconfigured:
-                return {
-                    "ok": True,
-                    "requested": len(cleaned_keys),
-                    "translated": 0,
-                    "changed": 0,
-                    "translated_keys": [],
-                    "failed": [],
-                    "skipped": True,
-                    "reason": "LLM 未配置，跳过前沿进展富化",
-                    "output_language": target_language,
-                }
-            return {"ok": False, "error": "LLM 未配置，无法执行多语言翻译"}
 
         loaded = self.progress.load()
         rows = loaded.get("items") if isinstance(loaded, dict) else []
@@ -5912,12 +6268,32 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         worker_count = max(1, min(int(max_workers or 2), 4))
         if pending_rows:
-            translations, batch_failed = self._enrich_progress_items_batch_with_llm(
+            # Fast translator first for lower latency and lower cost.
+            fast_translations, fast_failed = self._enrich_progress_items_batch_with_fast(
                 pending_rows=pending_rows,
                 target_language=target_language,
-                client_config=client_config,
+                settings=settings,
             )
-            failed.extend(batch_failed)
+            if fast_translations:
+                translations.update(fast_translations)
+            failed.extend(fast_failed)
+
+            remaining_rows = [(key, row) for key, row in pending_rows if key not in translations]
+            if remaining_rows and client_config:
+                llm_translations, batch_failed = self._enrich_progress_items_batch_with_llm(
+                    pending_rows=remaining_rows,
+                    target_language=target_language,
+                    client_config=client_config,
+                )
+                if llm_translations:
+                    llm_keys = set(llm_translations.keys())
+                    translations.update(llm_translations)
+                    failed = [
+                        item
+                        for item in failed
+                        if str(item.get("key", "") or "").strip() not in llm_keys
+                    ]
+                failed.extend(batch_failed)
 
         apply_result = (
             self.progress.apply_translations(translations)
@@ -5938,6 +6314,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         }
 
     def _build_subscription_payload_text(
+
         self,
         sub: Dict[str, Any],
         papers: List[Dict[str, Any]],
@@ -6029,11 +6406,42 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not source:
             return ""
         lang = normalize_analysis_language(target_language, default="Chinese")
-        if is_chinese_language(lang):
+        conf = settings if isinstance(settings, dict) else {}
+        engine = str(
+            conf.get("notification_translation_engine")
+            or os.environ.get("NOTIFICATION_TRANSLATION_ENGINE")
+            or "fast"
+        ).strip().lower()
+        if engine in {"", "auto"}:
+            engine = "fast"
+        if engine in {"off", "none", "disabled"}:
             return source
-        client_config = self._build_paper_llm_client_config(settings)
+
+        # Fast translator is default for push text translation.
+        if engine in {"fast", "google", "libretranslate"}:
+            provider = "google" if engine == "fast" else engine
+            try:
+                translator = FastTranslator.from_settings(conf, provider=provider)
+                translated = translator.translate_text(source, target_language=lang)
+                translated = str(translated or "").strip()
+                if translated:
+                    return translated
+            except Exception as exc:
+                print(f"[translate][fast] failed provider={provider}: {type(exc).__name__}: {exc}")
+            allow_llm_fallback = bool(
+                parse_bool_text(
+                    conf.get("notification_translation_allow_llm_fallback")
+                    or os.environ.get("NOTIFICATION_TRANSLATION_ALLOW_LLM_FALLBACK"),
+                    False,
+                )
+            )
+            if not allow_llm_fallback:
+                return source
+
+        # Optional LLM fallback.
+        client_config = self._build_paper_llm_client_config(conf)
         if not client_config:
-            client_config = self._build_progress_llm_client_config(settings)
+            client_config = self._build_progress_llm_client_config(conf)
         if not client_config:
             return source
         prompt = (
@@ -6686,16 +7094,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             scope = normalize_progress_scope(scope_raw, default="")
             all_sources = self.progress.list_sources()
             if scope:
-                allowed_kinds = {
-                    x.strip().lower()
-                    for x in self._progress_kind_for_scope(scope).split(",")
-                    if x.strip()
-                }
-                items = [
-                    row
-                    for row in all_sources
-                    if str(row.get("kind", "") or "").strip().lower() in allowed_kinds
-                ]
+                items = self._filter_progress_sources_for_scope(scope, all_sources)
             else:
                 items = all_sources
             self._send_json({"items": items, "count": len(items), "scope": scope or "all"})
@@ -6712,13 +7111,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             params = parse_qs(parsed.query)
             scope = normalize_progress_scope(str((params.get("scope") or ["frontier"])[0] or "frontier"), default="frontier")
             settings = self.progress_page_settings.get_scope(scope)
-            all_sources = self.progress.list_sources()
-            allowed_kinds = {x.strip().lower() for x in self._progress_kind_for_scope(scope).split(",") if x.strip()}
-            scoped_sources = [
-                row
-                for row in all_sources
-                if str(row.get("kind", "") or "").strip().lower() in allowed_kinds
-            ]
+            scoped_sources = self._filter_progress_sources_for_scope(scope, self.progress.list_sources())
             self._send_json(
                 {
                     "ok": True,
@@ -7024,6 +7417,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if path == "/api/schedule":
             data = self._read_json()
+            cron_expr_raw = str(data.get("cron_expr", "") or "").strip()
+            if cron_expr_raw:
+                try:
+                    info = self.schedule.update_cron_expr(cron_expr_raw)
+                except ValueError as exc:
+                    self._send_json({"ok": False, "error": str(exc)}, status=400)
+                    return
+                except Exception as exc:
+                    self._send_json({"ok": False, "error": f"failed to update schedule: {exc}"}, status=500)
+                    return
+
+                self._send_json({"ok": True, **info})
+                return
+
             interval = data.get("interval_minutes")
             try:
                 interval_int = int(interval)
@@ -7135,16 +7542,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             data = self._read_json()
             scope = normalize_progress_scope(data.get("scope", "frontier"), default="frontier")
             updates: Dict[str, Any] = {}
-            if "max_per_source" in data:
-                updates["max_per_source"] = parse_int_value(data.get("max_per_source"), 1, 120)
             if "fetch_workers" in data:
                 updates["fetch_workers"] = parse_int_value(data.get("fetch_workers"), 1, 16)
             if "source_ids" in data:
                 updates["source_ids"] = data.get("source_ids") if isinstance(data.get("source_ids"), list) else []
             if "notify_channel" in data:
                 updates["notify_channel"] = str(data.get("notify_channel", "") or "").strip().lower()
-            if "notify_limit" in data:
-                updates["notify_limit"] = parse_int_value(data.get("notify_limit"), 1, 30)
             if "output_language" in data:
                 updates["output_language"] = normalize_analysis_language(
                     data.get("output_language"),
@@ -7319,6 +7722,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             settings = self._progress_notify_settings(scope)
             msg_text = self._build_progress_payload_text(
                 items,
+                scope=scope,
                 strategy="daily",
                 output_language=output_language,
             )
@@ -7499,41 +7903,97 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": f"channel must be {allowed}"}, status=400)
                 return
             settings = self.settings.load()
+            requested_lang_raw = str(data.get("output_language", "") or "").strip()
+            if requested_lang_raw:
+                output_language = normalize_analysis_language(requested_lang_raw, default="Chinese")
+            else:
+                output_language = normalize_analysis_language(
+                    settings.get("analysis_language", "Chinese"),
+                    default="Chinese",
+                )
+            custom_message = str(data.get("message", "") or "").strip()
+            default_test_message = (
+                f"OmniHawk AI 面板测试通知\n"
+                f"时间: {utc_now_iso()}\n"
+                f"渠道: {channel}"
+            )
+            source_message = custom_message or default_test_message
+            translated_message = self._translate_notification_text_with_llm(
+                source_message,
+                target_language=output_language,
+                settings=settings,
+            )
             if channel == "feishu":
-                ok, msg = self._send_test_webhook("feishu", settings.get("feishu_webhook_url", ""))
+                ok, msg = self._send_test_webhook(
+                    "feishu",
+                    settings.get("feishu_webhook_url", ""),
+                    message=translated_message,
+                )
             elif channel in {"wework", "wechat"}:
                 msg_type = "text" if channel == "wechat" else str(settings.get("wework_msg_type", "markdown") or "markdown")
                 ok, msg = self._send_test_webhook(
                     "wework",
                     settings.get("wework_webhook_url", ""),
+                    message=translated_message,
                     msg_type=msg_type,
                 )
             elif channel == "dingtalk":
-                ok, msg = self._send_test_dingtalk(str(settings.get("dingtalk_webhook_url", "") or "").strip())
+                ok, msg = self._send_test_dingtalk(
+                    str(settings.get("dingtalk_webhook_url", "") or "").strip(),
+                    message=translated_message,
+                )
             elif channel == "telegram":
                 ok, msg = self._send_test_telegram(
                     str(settings.get("telegram_bot_token", "") or "").strip(),
                     str(settings.get("telegram_chat_id", "") or "").strip(),
+                    message=translated_message,
                 )
             elif channel == "ntfy":
                 ok, msg = self._send_test_ntfy(
                     str(settings.get("ntfy_server_url", "") or "").strip() or DEFAULT_NTFY_SERVER_URL,
                     str(settings.get("ntfy_topic", "") or "").strip(),
                     str(settings.get("ntfy_token", "") or "").strip(),
+                    message=translated_message,
                 )
             elif channel == "bark":
-                ok, msg = self._send_test_bark(str(settings.get("bark_url", "") or "").strip())
+                ok, msg = self._send_test_bark(
+                    str(settings.get("bark_url", "") or "").strip(),
+                    message=translated_message,
+                )
             elif channel == "slack":
-                ok, msg = self._send_test_slack(str(settings.get("slack_webhook_url", "") or "").strip())
+                ok, msg = self._send_test_slack(
+                    str(settings.get("slack_webhook_url", "") or "").strip(),
+                    message=translated_message,
+                )
             elif channel == "email":
-                ok, msg = self._send_test_email(settings)
+                ok, msg = self._send_test_email(
+                    settings,
+                    body=translated_message,
+                )
             else:
                 self._send_json({"ok": False, "error": "unsupported channel"}, status=400)
                 return
             if ok:
-                self._send_json({"ok": True, "channel": channel, "message": msg})
+                self._send_json(
+                    {
+                        "ok": True,
+                        "channel": channel,
+                        "message": msg,
+                        "output_language": output_language,
+                        "translated": translated_message != source_message,
+                    }
+                )
             else:
-                self._send_json({"ok": False, "channel": channel, "error": msg}, status=400)
+                self._send_json(
+                    {
+                        "ok": False,
+                        "channel": channel,
+                        "error": msg,
+                        "output_language": output_language,
+                        "translated": translated_message != source_message,
+                    },
+                    status=400,
+                )
             return
 
         self._send_json({"ok": False, "error": "not found"}, status=404)
