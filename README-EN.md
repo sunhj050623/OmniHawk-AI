@@ -39,16 +39,6 @@ fetch, dedupe, analyze, subscribe, and push from one platform, with MCP + CLI in
 
 </div>
 
-## 🖼️ Screenshots
-### Web Pages (img1 - img4)
-| Page 1 | Page 2 |
-| --- | --- |
-| ![Web Page 1](example/img1.png) | ![Web Page 2](example/img2.png) |
-| ![Web Page 3](example/img3.png) | ![Web Page 4](example/img4.png) |
-
-### Subscription Channel Page (img5)
-![Subscription Channel Page](example/img5.png)
-
 ## 🚀 Why This Project Exists
 AI signals are highly fragmented and move fast. Manual tracking usually breaks down due to:
 
@@ -137,6 +127,16 @@ Notes:
                 | (agent automation)  |
                 +---------------------+
 ```
+
+## 🖼️ Screenshots
+### Web Pages (img1 - img4)
+| Page 1 | Page 2 |
+| --- | --- |
+| ![Web Page 1](example/img1.png) | ![Web Page 2](example/img2.png) |
+| ![Web Page 3](example/img3.png) | ![Web Page 4](example/img4.png) |
+
+### Subscription Channel Page (img5)
+![Subscription Channel Page](example/img5.png)
 
 ---
 
