@@ -10,10 +10,16 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](#)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#docker-start)
 [![MCP](https://img.shields.io/badge/MCP-Enabled-111827?style=for-the-badge)](#mcp-service)
-[![CLI](https://img.shields.io/badge/Agent_CLI-Ready-0ea5e9?style=for-the-badge)](#agent-cli-new)
 [![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)](LICENSE)
 
-**📣 サブスクリプションプッシュチャネル**
+**📣 コア機能ハイライト**
+
+![AI Paper Radar](https://img.shields.io/badge/AI%20Paper%20Radar-Research%20Tracking-2563EB?style=flat-square)
+![AI Frontier Radar](https://img.shields.io/badge/AI%20Frontier%20Radar-Model%20Releases-0EA5E9?style=flat-square)
+![AI OSS Signals](https://img.shields.io/badge/AI%20OSS%20Signals-Developer%20Ecosystem-1D4ED8?style=flat-square)
+![Dedup Push](https://img.shields.io/badge/Dedup%20Push-daily%20%7C%20incremental%20%7C%20realtime-0F766E?style=flat-square)
+
+**🔔 通知チャネル**
 
 ![Feishu](https://img.shields.io/badge/Feishu-Notify-00C95A?style=flat-square)
 ![WeCom](https://img.shields.io/badge/WeCom-Notify-00A1FF?style=flat-square)
@@ -24,16 +30,6 @@
 ![Bark](https://img.shields.io/badge/Bark-Notify-FF7A59?style=flat-square)
 ![Slack](https://img.shields.io/badge/Slack-Notify-4A154B?style=flat-square)
 ![Email](https://img.shields.io/badge/Email-Notify-6366F1?style=flat-square)
-
-**🏷️重要なタグ**
-
-![AI Paper Radar](https://img.shields.io/badge/AI%20Paper%20Radar-Research%20Tracking-2563EB?style=flat-square)
-![AI Frontier Radar](https://img.shields.io/badge/AI%20Frontier%20Radar-Model%20Releases-0EA5E9?style=flat-square)
-![AI Finance](https://img.shields.io/badge/AI%20Finance-Global%20Markets-0891B2?style=flat-square)
-![AI Industry Reports](https://img.shields.io/badge/AI%20Industry%20Reports-Institutional%20Insights-14B8A6?style=flat-square)
-![AI Policy and Safety](https://img.shields.io/badge/AI%20Policy%20%26%20Safety-Regulation%20%26%20Risk-7C3AED?style=flat-square)
-![AI OSS Signals](https://img.shields.io/badge/AI%20OSS%20Signals-Developer%20Ecosystem-1D4ED8?style=flat-square)
-![Subscription Push](https://img.shields.io/badge/Subscription%20Push-Multi%20Channel-0F766E?style=flat-square)
 
 <p align="center">
   <img src="image.png" alt="OpenHawk project banner" width="920" />

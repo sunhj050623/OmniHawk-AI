@@ -10,10 +10,16 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](#)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#docker-启动)
 [![MCP](https://img.shields.io/badge/MCP-Enabled-111827?style=for-the-badge)](#mcp-服务)
-[![CLI](https://img.shields.io/badge/Agent_CLI-Ready-0ea5e9?style=for-the-badge)](#agent-cli-接口新增)
 [![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)](LICENSE)
 
-**📣 多渠道订阅推送**
+**📣 核心能力速览**
+
+![AI论文雷达](https://img.shields.io/badge/AI论文雷达-学术追踪-2563EB?style=flat-square)
+![AI前沿雷达](https://img.shields.io/badge/AI前沿雷达-模型发布-0EA5E9?style=flat-square)
+![AI开源生态](https://img.shields.io/badge/AI开源生态-开发者信号-1D4ED8?style=flat-square)
+![去重推送](https://img.shields.io/badge/去重推送-daily%20%7C%20incremental%20%7C%20realtime-0F766E?style=flat-square)
+
+**🔔 通知渠道（主）**
 
 ![Feishu](https://img.shields.io/badge/飞书-通知-00C95A?style=flat-square)
 ![WeCom](https://img.shields.io/badge/企业微信-通知-00A1FF?style=flat-square)
@@ -24,16 +30,6 @@
 ![Bark](https://img.shields.io/badge/Bark-通知-FF7A59?style=flat-square)
 ![Slack](https://img.shields.io/badge/Slack-通知-4A154B?style=flat-square)
 ![Email](https://img.shields.io/badge/Email-通知-6366F1?style=flat-square)
-
-**🏷️ 重要标签**
-
-![AI论文雷达](https://img.shields.io/badge/AI论文雷达-学术追踪-2563EB?style=flat-square)
-![AI前沿雷达](https://img.shields.io/badge/AI前沿雷达-模型发布-0EA5E9?style=flat-square)
-![AI财经信息](https://img.shields.io/badge/AI财经信息-全球市场-0891B2?style=flat-square)
-![AI产业报告](https://img.shields.io/badge/AI产业报告-机构研究-14B8A6?style=flat-square)
-![AI政策与安全](https://img.shields.io/badge/AI政策与安全-监管与风险-7C3AED?style=flat-square)
-![AI开源生态](https://img.shields.io/badge/AI开源生态-开发者信号-1D4ED8?style=flat-square)
-![订阅推送](https://img.shields.io/badge/订阅推送-多渠道触达-0F766E?style=flat-square)
 
 <p align="center">
   <img src="image.png" alt="OpenHawk project banner" width="920" />
