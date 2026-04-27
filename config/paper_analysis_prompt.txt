@@ -1,4 +1,4 @@
-﻿# OmniHawk AI paper analysis prompt
+# OpenHawk paper analysis prompt
 # Version: 1.0.0
 # Variables:
 #   {title} {url} {arxiv_id} {categories} {authors} {abstract} {language} {paper_meta_json}

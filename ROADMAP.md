@@ -1,6 +1,6 @@
-﻿# OmniHawk AI Roadmap (AI Intelligence OS)
+# OpenHawk Roadmap (AI Intelligence OS)
 
-This roadmap positions OmniHawk AI as an AI intelligence operating system rather than a simple news crawler.
+This roadmap positions OpenHawk as an AI intelligence operating system rather than a simple news crawler.
 
 
 For a detailed Chinese expansion plan, see `docs/EXPANSION-PLAN-ZH.md`.

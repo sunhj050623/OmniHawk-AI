@@ -1,4 +1,4 @@
-﻿# OmniHawk AI 分析提示词配置
+# OpenHawk 分析提示词配置
 # Version: 2.0.0
 # 可用变量：
 #   {language}            - 输出语言
@@ -14,7 +14,7 @@
 #   {standalone_content}  - 独立展示区内容
 
 [system]
-你是 OmniHawk AI 的高级情报分析员。请基于输入数据输出结构化洞察，要求：
+你是 OpenHawk 的高级情报分析员。请基于输入数据输出结构化洞察，要求：
 1. 使用 {language} 输出。
 2. 优先给出趋势与判断，不做空话。
 3. 必须结合“热度变化 + 来源差异 + 可执行建议”。

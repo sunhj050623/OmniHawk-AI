@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🦅 OmniHawk AI
+# 🦅 OpenHawk
 
 ### Global AI Intelligence OS for the Agent Era
 
@@ -36,7 +36,7 @@ fetch, dedupe, analyze, subscribe, and push from one platform, with MCP + CLI in
 ![Subscription Push](https://img.shields.io/badge/Subscription%20Push-Multi%20Channel-0F766E?style=flat-square)
 
 <p align="center">
-  <img src="image.png" alt="OmniHawk AI project banner" width="920" />
+  <img src="image.png" alt="OpenHawk project banner" width="920" />
 </p>
 
 [中文](README.md) | **English** | [हिन्दी](README-HI.md) | [Español](README-ES.md) | [العربية](README-AR.md) | [Français](README-FR.md) | [Português](README-PT.md) | [বাংলা](README-BN.md) | [日本語](README-JA.md) | [한국어](README-KO.md)
@@ -51,7 +51,7 @@ AI signals are highly fragmented and move fast. Manual tracking usually breaks d
 - Deduplication pain: syndicated reposts trigger repeated ingestion and repeated notifications.
 - Automation gap: difficult to integrate "intelligence fetching" directly into agent pipelines.
 
-`OmniHawk AI` turns this into an always-on, extensible intelligence layer that agents can call directly.
+`OpenHawk` turns this into an always-on, extensible intelligence layer that agents can call directly.
 
 ## 👥 Who It Is For
 - AI researchers: track papers and method evolution continuously.
@@ -92,10 +92,10 @@ AI signals are highly fragmented and move fast. Manual tracking usually breaks d
 Example (CLI):
 ```bash
 # Set AI Finance page output language to Japanese
-omnihawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
+openhawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
 
 # Fetch using this scope and language policy
-omnihawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
+openhawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
 ```
 
 ## 🧠 Smart Push Strategy
@@ -147,17 +147,17 @@ uv sync --locked
 
 1. Run the main fetch/runtime once:
 ```bash
-omnihawk-ai
+openhawk-ai
 ```
 
 2. Run the interactive Web console (6-page UI):
 ```bash
-python -m omnihawk_ai.web.panel_server --port 8080 --output-dir output
+python -m openhawk_ai.web.panel_server --port 8080 --output-dir output
 ```
 
 3. Start MCP service (HTTP):
 ```bash
-omnihawk-ai-mcp --transport http --host 0.0.0.0 --port 3333
+openhawk-ai-mcp --transport http --host 0.0.0.0 --port 3333
 ```
 
 ### 3) 🐳 Docker Start
@@ -182,7 +182,7 @@ docker compose -f docker/docker-compose.yml logs -f
 ---
 
 ## 🤖 Agent CLI (New)
-To let agents/scripts call OmniHawk tools directly without MCP transport, this repo adds `omnihawk-ai-cli`.
+To let agents/scripts call OpenHawk tools directly without MCP transport, this repo adds `openhawk-ai-cli`.
 
 ### 🎯 Design Goals
 - Same capability surface as MCP tools (same tool names and argument semantics).
@@ -191,33 +191,33 @@ To let agents/scripts call OmniHawk tools directly without MCP transport, this r
 
 ### 🧪 Basic Command
 ```bash
-omnihawk-ai-cli tools
+openhawk-ai-cli tools
 ```
 
 ### 📌 Common Examples
 1. List all available tools and params:
 ```bash
-omnihawk-ai-cli tools
+openhawk-ai-cli tools
 ```
 
 2. Call a tool with inline JSON:
 ```bash
-omnihawk-ai-cli call list_scope_items --args '{"scope":"market_finance","limit":20}'
+openhawk-ai-cli call list_scope_items --args '{"scope":"market_finance","limit":20}'
 ```
 
 3. Call a tool with args file:
 ```bash
-omnihawk-ai-cli call upsert_scope_subscription --args-file ./payload.json
+openhawk-ai-cli call upsert_scope_subscription --args-file ./payload.json
 ```
 
 4. Override project root and output directory:
 ```bash
-omnihawk-ai-cli --project-root . --output-dir ./output call get_project_overview
+openhawk-ai-cli --project-root . --output-dir ./output call get_project_overview
 ```
 
 5. Compact JSON output (pipeline-friendly):
 ```bash
-omnihawk-ai-cli call list_scopes --compact
+openhawk-ai-cli call list_scopes --compact
 ```
 
 ### Windows PowerShell Examples (Recommended)
@@ -225,7 +225,7 @@ omnihawk-ai-cli call list_scopes --compact
 ```powershell
 $payload = @{ scope = "market_finance"; limit = 20 } | ConvertTo-Json -Compress
 $payload | Set-Content -Encoding utf8 .\payload.json
-omnihawk-ai-cli call list_scope_items --args-file .\payload.json --compact
+openhawk-ai-cli call list_scope_items --args-file .\payload.json --compact
 ```
 
 2. Use a here-string args file:
@@ -238,12 +238,12 @@ omnihawk-ai-cli call list_scope_items --args-file .\payload.json --compact
 }
 '@ | Set-Content -Encoding utf8 .\payload.json
 
-omnihawk-ai-cli call fetch_scope_items --args-file .\payload.json --compact
+openhawk-ai-cli call fetch_scope_items --args-file .\payload.json --compact
 ```
 
 3. Tools that need no args can be called directly:
 ```powershell
-omnihawk-ai-cli call get_project_overview --compact
+openhawk-ai-cli call get_project_overview --compact
 ```
 
 ### 🧾 Exit Codes
@@ -267,7 +267,7 @@ CLI fixed arguments:
 Tool business arguments are defined per tool. Use:
 
 ```bash
-omnihawk-ai-cli tools --compact
+openhawk-ai-cli tools --compact
 ```
 
 Coverage boundary:
@@ -370,14 +370,14 @@ Implemented consistently across backend + frontend + MCP + CLI:
 ## 🗂️ Project Structure
 ```text
 .
-├─ omnihawk_ai/                # Core runtime (fetch/analyze/push/web)
+├─ openhawk_ai/                # Core runtime (fetch/analyze/push/web)
 │  ├─ __main__.py             # Main entry
 │  ├─ agent_cli.py            # Agent CLI entry (new)
 │  └─ web/panel_server.py     # Interactive console server
 ├─ mcp_server/                # MCP server
 ├─ config/                    # Configuration and prompt templates
 ├─ docker/                    # Dockerfile / compose / entry scripts
-├─ docs/assets/               # README visual assets (including OmniHawk SVG)
+├─ docs/assets/               # README visual assets (including OpenHawk SVG)
 ├─ output/                    # Runtime persistent data
 ├─ README.md
 └─ README-EN.md
@@ -401,7 +401,7 @@ Check:
 ### Q4: What is the minimum agent integration path?
 Start with:
 ```bash
-omnihawk-ai-cli call get_project_overview
+openhawk-ai-cli call get_project_overview
 ```
 Then call `list_scope_items` / `list_papers` / `run_*_subscriptions` as needed.
 
@@ -409,7 +409,7 @@ Then call `list_scope_items` / `list_papers` / `run_*_subscriptions` as needed.
 
 ## 🙏 Acknowledgements and Reference
 - This project references and is inspired by [TrendRadar](https://github.com/sansan0/TrendRadar).
-- OmniHawk AI independently extends the architecture with six parallel pages, regionalized source strategy, multi-channel subscriptions, and integrated MCP + Agent CLI workflows.
+- OpenHawk independently extends the architecture with six parallel pages, regionalized source strategy, multi-channel subscriptions, and integrated MCP + Agent CLI workflows.
 
 ---
 

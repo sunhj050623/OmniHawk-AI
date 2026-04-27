@@ -1,9 +1,9 @@
-﻿services:
-  omnihawk-ai:
+services:
+  openhawk-ai:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: omnihawk-ai
+    container_name: openhawk-ai
     restart: unless-stopped
 
     ports:
@@ -53,11 +53,11 @@
       - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
       - RUN_MODE=${RUN_MODE:-cron}
       - IMMEDIATE_RUN=${IMMEDIATE_RUN:-true}
-  omnihawk-ai-mcp:
+  openhawk-ai-mcp:
     build:
       context: ..
       dockerfile: docker/Dockerfile.mcp
-    container_name: omnihawk-ai-mcp
+    container_name: openhawk-ai-mcp
     restart: unless-stopped
 
     ports:

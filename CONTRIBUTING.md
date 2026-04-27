@@ -1,4 +1,4 @@
-﻿# Contributing to OmniHawk AI
+# Contributing to OpenHawk
 
 Thanks for contributing.
 

@@ -10,13 +10,13 @@ fi
 case "${RUN_MODE:-cron}" in
 "once")
     echo "RUN_MODE=once: starting one-shot crawl"
-    exec omnihawk-ai
+    exec openhawk-ai
     ;;
 "panel")
     PANEL_PORT="${WEBSERVER_PORT:-8080}"
     PANEL_OUTPUT_DIR="${PANEL_OUTPUT_DIR:-/app/output}"
-    echo "RUN_MODE=panel: starting OmniHawk AI panel server on port ${PANEL_PORT}"
-    exec python -m omnihawk_ai.web.panel_server --port "${PANEL_PORT}" --output-dir "${PANEL_OUTPUT_DIR}"
+    echo "RUN_MODE=panel: starting OpenHawk panel server on port ${PANEL_PORT}"
+    exec python -m openhawk_ai.web.panel_server --port "${PANEL_PORT}" --output-dir "${PANEL_OUTPUT_DIR}"
     ;;
 "cron")
     # Validate cron expression with a conservative character whitelist.
@@ -27,7 +27,7 @@ case "${RUN_MODE:-cron}" in
     fi
 
     # Build supercronic crontab.
-    echo "$CRON_EXPR cd /app && /app/.venv/bin/python -m omnihawk_ai" > /tmp/crontab
+    echo "$CRON_EXPR cd /app && /app/.venv/bin/python -m openhawk_ai" > /tmp/crontab
     echo "Generated crontab:"
     cat /tmp/crontab
 
@@ -39,7 +39,7 @@ case "${RUN_MODE:-cron}" in
     # Optional immediate run before scheduler starts.
     if [ "${IMMEDIATE_RUN:-false}" = "true" ]; then
         echo "Running immediate crawl before scheduler starts"
-        omnihawk-ai
+        openhawk-ai
     fi
 
     echo "Starting static web server"

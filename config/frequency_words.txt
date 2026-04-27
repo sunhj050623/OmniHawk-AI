@@ -1,4 +1,4 @@
-﻿# OmniHawk AI 关键词配置
+# OpenHawk 关键词配置
 # Version: 2.0.0
 # 说明：
 # 1. [GLOBAL_FILTER] 为全局过滤词。

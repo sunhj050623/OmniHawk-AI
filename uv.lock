@@ -1359,7 +1359,7 @@ wheels = [
 ]
 
 [[package]]
-name = "omnihawk-ai"
+name = "openhawk-ai"
 version = "6.6.1"
 source = { editable = "." }
 dependencies = [

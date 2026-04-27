@@ -36,7 +36,7 @@
 ![Subscription Push](https://img.shields.io/badge/Subscription%20Push-Multi%20Channel-0F766E?style=flat-square)
 
 <p align="center">
-  <img src="image.png" alt="OmniHawk AI project banner" width="920" />
+  <img src="image.png" alt="OpenHawk project banner" width="920" />
 </p>
 
 [中文](README.md) | [English](README-EN.md) | **हिन्दी** | [Español](README-ES.md) | [العربية](README-AR.md) | [Français](README-FR.md) | [Português](README-PT.md) | [বাংলা](README-BN.md) | [日本語](README-JA.md) | [한국어](README-KO.md)
@@ -92,10 +92,10 @@
 उदाहरण (सीएलआई):
 ```bash
 # Set AI Finance page output language to Japanese
-omnihawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
+openhawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
 
 # Fetch using this scope and language policy
-omnihawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
+openhawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
 ```
 
 ## 🧠 स्मार्ट पुश रणनीति
@@ -147,17 +147,17 @@ uv sync --locked
 
 1. मुख्य फ़ेच/रनटाइम को एक बार चलाएँ:
 ```bash
-omnihawk-ai
+openhawk-ai
 ```
 
 2. इंटरैक्टिव वेब कंसोल चलाएँ (6-पेज यूआई):
 ```bash
-python -m omnihawk_ai.web.panel_server --port 8080 --output-dir output
+python -m openhawk_ai.web.panel_server --port 8080 --output-dir output
 ```
 
 3. एमसीपी सेवा (HTTP) प्रारंभ करें:
 ```bash
-omnihawk-ai-mcp --transport http --host 0.0.0.0 --port 3333
+openhawk-ai-mcp --transport http --host 0.0.0.0 --port 3333
 ```
 
 ### 3) 🐳 डॉकर स्टार्ट
@@ -182,7 +182,7 @@ docker compose -f docker/docker-compose.yml logs -f
 ---
 
 ## 🤖 एजेंट सीएलआई (नया)
-एजेंटों/स्क्रिप्टों को एमसीपी ट्रांसपोर्ट के बिना सीधे ओमनीहॉक टूल को कॉल करने की अनुमति देने के लिए, यह रेपो `omnihawk-ai-cli` जोड़ता है।
+एजेंटों/स्क्रिप्टों को एमसीपी ट्रांसपोर्ट के बिना सीधे ओमनीहॉक टूल को कॉल करने की अनुमति देने के लिए, यह रेपो `openhawk-ai-cli` जोड़ता है।
 
 ### 🎯 डिज़ाइन लक्ष्य
 - एमसीपी टूल के समान क्षमता वाली सतह (समान टूल नाम और तर्क शब्दार्थ)।
@@ -191,33 +191,33 @@ docker compose -f docker/docker-compose.yml logs -f
 
 ### 🧪 बेसिक कमांड
 ```bash
-omnihawk-ai-cli tools
+openhawk-ai-cli tools
 ```
 
 ### 📌 सामान्य उदाहरण
 1. सभी उपलब्ध टूल और पैरामीटर्स की सूची बनाएं:
 ```bash
-omnihawk-ai-cli tools
+openhawk-ai-cli tools
 ```
 
 2. इनलाइन JSON के साथ एक टूल को कॉल करें:
 ```bash
-omnihawk-ai-cli call list_scope_items --args '{"scope":"market_finance","limit":20}'
+openhawk-ai-cli call list_scope_items --args '{"scope":"market_finance","limit":20}'
 ```
 
 3. args फ़ाइल वाले टूल को कॉल करें:
 ```bash
-omnihawk-ai-cli call upsert_scope_subscription --args-file ./payload.json
+openhawk-ai-cli call upsert_scope_subscription --args-file ./payload.json
 ```
 
 4. प्रोजेक्ट रूट और आउटपुट निर्देशिका को ओवरराइड करें:
 ```bash
-omnihawk-ai-cli --project-root . --output-dir ./output call get_project_overview
+openhawk-ai-cli --project-root . --output-dir ./output call get_project_overview
 ```
 
 5. कॉम्पैक्ट JSON आउटपुट (पाइपलाइन-अनुकूल):
 ```bash
-omnihawk-ai-cli call list_scopes --compact
+openhawk-ai-cli call list_scopes --compact
 ```
 
 ### विंडोज़ पावरशेल उदाहरण (अनुशंसित)
@@ -225,7 +225,7 @@ omnihawk-ai-cli call list_scopes --compact
 ```powershell
 $payload = @{ scope = "market_finance"; limit = 20 } | ConvertTo-Json -Compress
 $payload | Set-Content -Encoding utf8 .\payload.json
-omnihawk-ai-cli call list_scope_items --args-file .\payload.json --compact
+openhawk-ai-cli call list_scope_items --args-file .\payload.json --compact
 ```
 
 2. यहां-स्ट्रिंग आर्ग्स फ़ाइल का उपयोग करें:
@@ -238,12 +238,12 @@ omnihawk-ai-cli call list_scope_items --args-file .\payload.json --compact
 }
 '@ | Set-Content -Encoding utf8 .\payload.json
 
-omnihawk-ai-cli call fetch_scope_items --args-file .\payload.json --compact
+openhawk-ai-cli call fetch_scope_items --args-file .\payload.json --compact
 ```
 
 3. जिन उपकरणों को किसी तर्क की आवश्यकता नहीं है उन्हें सीधे कॉल किया जा सकता है:
 ```powershell
-omnihawk-ai-cli call get_project_overview --compact
+openhawk-ai-cli call get_project_overview --compact
 ```
 
 ### 🧾 निकास कोड
@@ -267,7 +267,7 @@ omnihawk-ai-cli call get_project_overview --compact
 टूल व्यवसाय तर्क प्रति टूल परिभाषित हैं। उपयोग:
 
 ```bash
-omnihawk-ai-cli tools --compact
+openhawk-ai-cli tools --compact
 ```
 
 कवरेज सीमा:
@@ -370,14 +370,14 @@ HTTP समापन बिंदु:
 ## 🗂️ परियोजना संरचना
 ```text
 .
-├─ omnihawk_ai/                # Core runtime (fetch/analyze/push/web)
+├─ openhawk_ai/                # Core runtime (fetch/analyze/push/web)
 │  ├─ __main__.py             # Main entry
 │  ├─ agent_cli.py            # Agent CLI entry (new)
 │  └─ web/panel_server.py     # Interactive console server
 ├─ mcp_server/                # MCP server
 ├─ config/                    # Configuration and prompt templates
 ├─ docker/                    # Dockerfile / compose / entry scripts
-├─ docs/assets/               # README visual assets (including OmniHawk SVG)
+├─ docs/assets/               # README visual assets (including OpenHawk SVG)
 ├─ output/                    # Runtime persistent data
 ├─ README.md
 └─ README-EN.md
@@ -401,7 +401,7 @@ HTTP समापन बिंदु:
 ### Q4: न्यूनतम एजेंट एकीकरण पथ क्या है?
 के साथ शुरू:
 ```bash
-omnihawk-ai-cli call get_project_overview
+openhawk-ai-cli call get_project_overview
 ```
 फिर आवश्यकतानुसार `list_scope_items` / `list_papers` / `run_*_subscriptions` को कॉल करें।
 

@@ -1,9 +1,9 @@
-﻿services:
-  omnihawk-ai:
+services:
+  openhawk-ai:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: omnihawk-ai
+    container_name: openhawk-ai
     restart: unless-stopped
 
     ports:
@@ -68,14 +68,14 @@
       # Shared crontab path for centralized scheduler service
       - PANEL_CRONTAB_PATH=${PANEL_CRONTAB_PATH:-/app/output/panel_schedule.crontab}
 
-  omnihawk-ai-scheduler:
+  openhawk-ai-scheduler:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: omnihawk-ai-scheduler
+    container_name: openhawk-ai-scheduler
     restart: unless-stopped
     depends_on:
-      - omnihawk-ai
+      - openhawk-ai
 
     ports:
       - "127.0.0.1:${SCHEDULER_WEBSERVER_PORT:-18081}:${SCHEDULER_WEBSERVER_PORT:-18081}"
@@ -98,14 +98,14 @@
         CRON_FILE="${PANEL_CRONTAB_PATH:-/app/output/panel_schedule.crontab}"
         mkdir -p "$$(dirname "$$CRON_FILE")"
         if [ ! -s "$$CRON_FILE" ]; then
-          echo "*/30 * * * * cd /app && /app/.venv/bin/python -m omnihawk_ai" > "$$CRON_FILE"
+          echo "*/30 * * * * cd /app && /app/.venv/bin/python -m openhawk_ai" > "$$CRON_FILE"
         fi
         python manage.py start_webserver
         exec /usr/local/bin/supercronic -passthrough-logs -inotify "$$CRON_FILE"
 
   libretranslate:
     image: libretranslate/libretranslate:latest
-    container_name: omnihawk-ai-libretranslate
+    container_name: openhawk-ai-libretranslate
     profiles: ["translator"]
     restart: unless-stopped
     ports:
@@ -120,11 +120,11 @@
       timeout: 5s
       retries: 10
 
-  omnihawk-ai-mcp:
+  openhawk-ai-mcp:
     build:
       context: ..
       dockerfile: docker/Dockerfile.mcp
-    container_name: omnihawk-ai-mcp
+    container_name: openhawk-ai-mcp
     restart: unless-stopped
 
     ports:

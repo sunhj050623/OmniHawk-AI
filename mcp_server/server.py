@@ -1,6 +1,6 @@
-"""OmniHawk AI MCP Server.
+"""OpenHawk MCP Server.
 
-Expose OmniHawk AI's current 6-page intelligence capabilities through MCP:
+Expose OpenHawk's current 6-page intelligence capabilities through MCP:
 - Paper Radar
 - Frontier Radar
 - AI Finance
@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 
-from omnihawk_ai.web.panel_server import (
+from openhawk_ai.web.panel_server import (
     DashboardHandler,
     DeepAnalysisService,
     PanelActionStore,
@@ -45,12 +45,12 @@ from omnihawk_ai.web.panel_server import (
     parse_bool_text,
     parse_int_value,
 )
-from omnihawk_ai.web.progress_repo import AIProgressRepository
+from openhawk_ai.web.progress_repo import AIProgressRepository
 
 from . import __version__
 
 
-APP_NAME = "omnihawk-ai"
+APP_NAME = "openhawk-ai"
 mcp = FastMCP(APP_NAME)
 
 
@@ -83,7 +83,7 @@ SCOPE_ALIASES: Dict[str, str] = {
 
 
 @dataclass
-class OmniHawkContext:
+class OpenHawkContext:
     project_root: Path
     output_dir: Path
     settings: PanelSettingsStore
@@ -99,7 +99,7 @@ class OmniHawkContext:
 
 
 _context_lock = threading.RLock()
-_context: Optional[OmniHawkContext] = None
+_context: Optional[OpenHawkContext] = None
 _root_override: Optional[Path] = None
 _output_override: Optional[Path] = None
 
@@ -138,7 +138,11 @@ def _resolve_project_root(project_root: Optional[str]) -> Path:
         return Path(project_root).resolve()
     if _root_override is not None:
         return _root_override.resolve()
-    env_root = str(os.getenv("OMNIHAWK_PROJECT_ROOT", "") or "").strip()
+    env_root = str(
+        os.getenv("OPENHAWK_PROJECT_ROOT", "")
+        or os.getenv("OMNIHAWK_PROJECT_ROOT", "")
+        or ""
+    ).strip()
     if env_root:
         return Path(env_root).resolve()
     return Path(__file__).resolve().parents[1]
@@ -150,7 +154,8 @@ def _resolve_output_dir(output_dir: Optional[str], project_root: Path) -> Path:
     if _output_override is not None:
         return _output_override.resolve()
     env_output = str(
-        os.getenv("OMNIHAWK_OUTPUT_DIR", "")
+        os.getenv("OPENHAWK_OUTPUT_DIR", "")
+        or os.getenv("OMNIHAWK_OUTPUT_DIR", "")
         or os.getenv("TRENDRADAR_OUTPUT_DIR", "")
         or ""
     ).strip()
@@ -183,7 +188,7 @@ def _build_helper(
     return helper
 
 
-def _build_context(project_root: Optional[str] = None, output_dir: Optional[str] = None) -> OmniHawkContext:
+def _build_context(project_root: Optional[str] = None, output_dir: Optional[str] = None) -> OpenHawkContext:
     root = _resolve_project_root(project_root)
     out = _resolve_output_dir(output_dir, root)
     out.mkdir(parents=True, exist_ok=True)
@@ -208,7 +213,7 @@ def _build_context(project_root: Optional[str] = None, output_dir: Optional[str]
         deep_analyzer=deep_analyzer,
     )
 
-    return OmniHawkContext(
+    return OpenHawkContext(
         project_root=root,
         output_dir=out,
         settings=settings,
@@ -224,7 +229,7 @@ def _build_context(project_root: Optional[str] = None, output_dir: Optional[str]
     )
 
 
-def _ensure_context(project_root: Optional[str] = None, output_dir: Optional[str] = None) -> OmniHawkContext:
+def _ensure_context(project_root: Optional[str] = None, output_dir: Optional[str] = None) -> OpenHawkContext:
     global _context
     with _context_lock:
         if _context is None:
@@ -253,7 +258,7 @@ def _scope_allowed_kinds(scope: str) -> List[str]:
     return [x.strip().lower() for x in kind_text.split(",") if x.strip()]
 
 
-def _scope_sources(ctx: OmniHawkContext, scope: str) -> List[Dict[str, Any]]:
+def _scope_sources(ctx: OpenHawkContext, scope: str) -> List[Dict[str, Any]]:
     allowed = set(_scope_allowed_kinds(scope))
     rows = []
     for source in ctx.progress.list_sources():
@@ -314,7 +319,7 @@ def _paper_filters(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 @mcp.tool
 async def get_project_overview() -> str:
-    """Get OmniHawk AI capability overview and current data status."""
+    """Get OpenHawk capability overview and current data status."""
 
     def worker() -> Dict[str, Any]:
         ctx = _ensure_context()
@@ -357,7 +362,7 @@ async def get_project_overview() -> str:
 
         return {
             "ok": True,
-            "project": "OmniHawk AI",
+            "project": "OpenHawk",
             "mcp_server": APP_NAME,
             "version": __version__,
             "project_root": str(ctx.project_root),
@@ -377,7 +382,7 @@ async def get_project_overview() -> str:
 
 @mcp.tool
 async def list_pages() -> str:
-    """List all independent pages supported by OmniHawk AI."""
+    """List all independent pages supported by OpenHawk."""
 
     return _json({"ok": True, "pages": PAGE_REGISTRY, "count": len(PAGE_REGISTRY)})
 
@@ -1071,7 +1076,7 @@ def run_server(
     port: int = 3333,
     output_dir: Optional[str] = None,
 ) -> None:
-    """Start OmniHawk MCP server.
+    """Start OpenHawk MCP server.
 
     Args:
         project_root: repo root path, optional.
@@ -1086,7 +1091,7 @@ def run_server(
 
     print()
     print("=" * 68)
-    print("  OmniHawk AI MCP Server")
+    print("  OpenHawk MCP Server")
     print("=" * 68)
     print(f"  Version: {__version__}")
     print(f"  Transport: {transport}")
@@ -1116,7 +1121,7 @@ def run_server(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="OmniHawk AI MCP Server",
+        description="OpenHawk MCP Server",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
