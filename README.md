@@ -39,6 +39,16 @@
 
 </div>
 
+## 🖼️ 项目截图
+### Web 前端页面（img1 - img4）
+| 页面 1 | 页面 2 |
+| --- | --- |
+| ![Web 页面 1](example/img1.png) | ![Web 页面 2](example/img2.png) |
+| ![Web 页面 3](example/img3.png) | ![Web 页面 4](example/img4.png) |
+
+### 渠道订阅页面（img5）
+![渠道订阅页面](example/img5.png)
+
 ## 🚀 为什么做这个项目
 AI 信息分散在不同来源，且更新速度极快。单靠手动跟踪，通常会遇到：
 
