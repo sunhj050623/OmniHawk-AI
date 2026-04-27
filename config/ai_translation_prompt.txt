@@ -1,4 +1,4 @@
-﻿# OmniHawk AI 翻译提示词配置
+# OpenHawk 翻译提示词配置
 # Version: 2.0.0
 # 可用变量：
 #   {target_language} - 目标语言

@@ -36,7 +36,7 @@
 ![Subscription Push](https://img.shields.io/badge/Subscription%20Push-Multi%20Channel-0F766E?style=flat-square)
 
 <p align="center">
-  <img src="image.png" alt="OmniHawk AI project banner" width="920" />
+  <img src="image.png" alt="OpenHawk project banner" width="920" />
 </p>
 
 [中文](README.md) | [English](README-EN.md) | [हिन्दी](README-HI.md) | [Español](README-ES.md) | **العربية** | [Français](README-FR.md) | [Português](README-PT.md) | [বাংলা](README-BN.md) | [日本語](README-JA.md) | [한국어](README-KO.md)
@@ -51,7 +51,7 @@
 - ألم إلغاء البيانات المكررة: تؤدي عمليات إعادة النشر المشتركة إلى تكرار العرض والإشعارات المتكررة.
 - فجوة الأتمتة: من الصعب دمج "جلب المعلومات الاستخبارية" مباشرة في مسارات العملاء.
 
-يقوم OmniHawk AI بتحويل هذا إلى طبقة ذكاء قابلة للتوسيع ودائمة التشغيل يمكن للعملاء الاتصال بها مباشرة.
+يقوم OpenHawk بتحويل هذا إلى طبقة ذكاء قابلة للتوسيع ودائمة التشغيل يمكن للعملاء الاتصال بها مباشرة.
 
 ## 👥 لمن
 - باحثو الذكاء الاصطناعي: يتابعون الأبحاث وتطور الأساليب بشكل مستمر.
@@ -92,10 +92,10 @@
 مثال (CLI):
 ```bash
 # Set AI Finance page output language to Japanese
-omnihawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
+openhawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
 
 # Fetch using this scope and language policy
-omnihawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
+openhawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
 ```
 
 ## 🧠 استراتيجية الدفع الذكية
@@ -147,17 +147,17 @@ uv sync --locked
 
 1. قم بتشغيل عملية الجلب/وقت التشغيل الرئيسية مرة واحدة:
 ```bash
-omnihawk-ai
+openhawk-ai
 ```
 
 2. قم بتشغيل وحدة تحكم الويب التفاعلية (واجهة مستخدم مكونة من 6 صفحات):
 ```bash
-python -m omnihawk_ai.web.panel_server --port 8080 --output-dir output
+python -m openhawk_ai.web.panel_server --port 8080 --output-dir output
 ```
 
 3. ابدأ خدمة MCP (HTTP):
 ```bash
-omnihawk-ai-mcp --transport http --host 0.0.0.0 --port 3333
+openhawk-ai-mcp --transport http --host 0.0.0.0 --port 3333
 ```
 
 ### 3) 🐳 بداية عامل الميناء
@@ -182,7 +182,7 @@ docker compose -f docker/docker-compose.yml logs -f
 ---
 
 ## 🤖 الوكيل CLI (جديد)
-للسماح للوكلاء/البرامج النصية باستدعاء أدوات OmniHawk مباشرةً دون نقل MCP، يضيف هذا الريبو `omnihawk-ai-cli`.
+للسماح للوكلاء/البرامج النصية باستدعاء أدوات OpenHawk مباشرةً دون نقل MCP، يضيف هذا الريبو `openhawk-ai-cli`.
 
 ### 🎯 أهداف التصميم
 - نفس سطح القدرة مثل أدوات MCP (نفس أسماء الأدوات ودلالات الوسيطات).
@@ -191,33 +191,33 @@ docker compose -f docker/docker-compose.yml logs -f
 
 ### 🧪 الأمر الأساسي
 ```bash
-omnihawk-ai-cli tools
+openhawk-ai-cli tools
 ```
 
 ### 📌أمثلة شائعة
 1. قم بإدراج جميع الأدوات والمعلمات المتاحة:
 ```bash
-omnihawk-ai-cli tools
+openhawk-ai-cli tools
 ```
 
 2. اتصل بأداة تحتوي على JSON المضمّن:
 ```bash
-omnihawk-ai-cli call list_scope_items --args '{"scope":"market_finance","limit":20}'
+openhawk-ai-cli call list_scope_items --args '{"scope":"market_finance","limit":20}'
 ```
 
 3. استدعاء أداة باستخدام ملف args:
 ```bash
-omnihawk-ai-cli call upsert_scope_subscription --args-file ./payload.json
+openhawk-ai-cli call upsert_scope_subscription --args-file ./payload.json
 ```
 
 4. تجاوز جذر المشروع ودليل الإخراج:
 ```bash
-omnihawk-ai-cli --project-root . --output-dir ./output call get_project_overview
+openhawk-ai-cli --project-root . --output-dir ./output call get_project_overview
 ```
 
 5. مخرجات JSON مدمجة (صديقة لخطوط الأنابيب):
 ```bash
-omnihawk-ai-cli call list_scopes --compact
+openhawk-ai-cli call list_scopes --compact
 ```
 
 ### أمثلة على Windows PowerShell (مستحسن)
@@ -225,7 +225,7 @@ omnihawk-ai-cli call list_scopes --compact
 ```powershell
 $payload = @{ scope = "market_finance"; limit = 20 } | ConvertTo-Json -Compress
 $payload | Set-Content -Encoding utf8 .\payload.json
-omnihawk-ai-cli call list_scope_items --args-file .\payload.json --compact
+openhawk-ai-cli call list_scope_items --args-file .\payload.json --compact
 ```
 
 2. استخدم ملف وسيطات السلسلة هنا:
@@ -238,12 +238,12 @@ omnihawk-ai-cli call list_scope_items --args-file .\payload.json --compact
 }
 '@ | Set-Content -Encoding utf8 .\payload.json
 
-omnihawk-ai-cli call fetch_scope_items --args-file .\payload.json --compact
+openhawk-ai-cli call fetch_scope_items --args-file .\payload.json --compact
 ```
 
 3. يمكن استدعاء الأدوات التي لا تحتاج إلى وسيطات مباشرةً:
 ```powershell
-omnihawk-ai-cli call get_project_overview --compact
+openhawk-ai-cli call get_project_overview --compact
 ```
 
 ### 🧾 رموز الخروج
@@ -267,7 +267,7 @@ omnihawk-ai-cli call get_project_overview --compact
 يتم تعريف وسيطات أعمال الأداة لكل أداة. يستخدم:
 
 ```bash
-omnihawk-ai-cli tools --compact
+openhawk-ai-cli tools --compact
 ```
 
 حدود التغطية:
@@ -370,14 +370,14 @@ python -m mcp_server.server --transport http --host 0.0.0.0 --port 3333
 ## 🗂️هيكل المشروع
 ```text
 .
-├─ omnihawk_ai/                # Core runtime (fetch/analyze/push/web)
+├─ openhawk_ai/                # Core runtime (fetch/analyze/push/web)
 │  ├─ __main__.py             # Main entry
 │  ├─ agent_cli.py            # Agent CLI entry (new)
 │  └─ web/panel_server.py     # Interactive console server
 ├─ mcp_server/                # MCP server
 ├─ config/                    # Configuration and prompt templates
 ├─ docker/                    # Dockerfile / compose / entry scripts
-├─ docs/assets/               # README visual assets (including OmniHawk SVG)
+├─ docs/assets/               # README visual assets (including OpenHawk SVG)
 ├─ output/                    # Runtime persistent data
 ├─ README.md
 └─ README-EN.md
@@ -401,7 +401,7 @@ python -m mcp_server.server --transport http --host 0.0.0.0 --port 3333
 ### س4: ما هو الحد الأدنى لمسار تكامل الوكيل؟
 ابدأ بـ:
 ```bash
-omnihawk-ai-cli call get_project_overview
+openhawk-ai-cli call get_project_overview
 ```
 ثم اتصل بـ `list_scope_items` / `list_papers` / `run_*_subscriptions` حسب الحاجة.
 
@@ -409,7 +409,7 @@ omnihawk-ai-cli call get_project_overview
 
 ## 🙏 شكر وتقدير ومرجع
 - يشير هذا المشروع إلى [TrendRadar](https://github.com/sansan0/TrendRadar) وهو مستوحى منه.
-- يقوم OmniHawk AI بتوسيع البنية بشكل مستقل من خلال ست صفحات متوازية، واستراتيجية مصدر إقليمية، واشتراكات متعددة القنوات، وسير عمل MCP + Agent CLI المتكامل.
+- يقوم OpenHawk بتوسيع البنية بشكل مستقل من خلال ست صفحات متوازية، واستراتيجية مصدر إقليمية، واشتراكات متعددة القنوات، وسير عمل MCP + Agent CLI المتكامل.
 
 ---
 

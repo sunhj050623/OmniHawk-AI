@@ -1,0 +1,79 @@
+<svg width="1400" height="620" viewBox="0 0 1400 620" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">OpenHawk Banner</title>
+  <desc id="desc">A clear hawk head with radar rings, representing global AI signal scanning and routing.</desc>
+  <defs>
+    <linearGradient id="bg" x1="60" y1="40" x2="1340" y2="580" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050F27"/>
+      <stop offset="1" stop-color="#04142F"/>
+    </linearGradient>
+    <linearGradient id="radarRing" x1="280" y1="110" x2="280" y2="510" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5EF0D3"/>
+      <stop offset="1" stop-color="#1897FF"/>
+    </linearGradient>
+    <linearGradient id="neck" x1="520" y1="190" x2="1030" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7AF7D9"/>
+      <stop offset="0.45" stop-color="#43D8B4"/>
+      <stop offset="1" stop-color="#1382FF"/>
+    </linearGradient>
+    <linearGradient id="beakTop" x1="884" y1="270" x2="1140" y2="336" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD98A"/>
+      <stop offset="1" stop-color="#FFA53D"/>
+    </linearGradient>
+    <linearGradient id="beakBottom" x1="922" y1="350" x2="1090" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCF76"/>
+      <stop offset="1" stop-color="#F2872E"/>
+    </linearGradient>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="28" y="24" width="1344" height="572" rx="30" fill="url(#bg)"/>
+  <rect x="28" y="24" width="1344" height="572" rx="30" stroke="#234A76" stroke-opacity="0.55"/>
+
+  <g opacity="0.95">
+    <circle cx="280" cy="310" r="200" stroke="url(#radarRing)" stroke-width="2.2" stroke-opacity="0.65"/>
+    <circle cx="280" cy="310" r="152" stroke="url(#radarRing)" stroke-width="2.2" stroke-opacity="0.52"/>
+    <circle cx="280" cy="310" r="104" stroke="url(#radarRing)" stroke-width="2.2" stroke-opacity="0.44"/>
+    <circle cx="280" cy="310" r="60" stroke="url(#radarRing)" stroke-width="2.2" stroke-opacity="0.35"/>
+    <path d="M280 108V512M78 310H482" stroke="#4EDDBE" stroke-opacity="0.36"/>
+    <path d="M280 310L412 178" stroke="#68F4DD" stroke-opacity="0.38"/>
+    <circle cx="280" cy="310" r="8.5" fill="#A8FFF0" filter="url(#softGlow)"/>
+    <circle cx="412" cy="178" r="6" fill="#7AF7D9"/>
+    <circle cx="176" cy="428" r="6" fill="#6FEED0"/>
+    <circle cx="454" cy="380" r="5.5" fill="#55B8FF"/>
+  </g>
+
+  <g>
+    <path d="M520 365C500 260 570 170 705 162C820 156 920 212 986 300C935 300 888 319 854 357C819 396 774 432 708 446C613 467 540 435 520 365Z" fill="url(#neck)"/>
+    <path d="M640 307C666 248 726 215 793 219C838 222 882 240 915 272C876 276 846 292 820 318C794 344 772 368 732 377C685 388 651 360 640 307Z" fill="#EAFBF6"/>
+    <path d="M886 272C967 267 1046 286 1134 329C1042 341 972 373 910 425C897 399 888 341 886 272Z" fill="url(#beakTop)"/>
+    <path d="M924 348C985 353 1041 373 1087 405C1029 413 979 435 937 467C928 443 922 394 924 348Z" fill="url(#beakBottom)"/>
+    <path d="M918 350L1078 407" stroke="#C26D17" stroke-opacity="0.45"/>
+    <circle cx="790" cy="302" r="24" fill="#06142F"/>
+    <circle cx="780" cy="294" r="5.2" fill="#A7DBFF"/>
+    <ellipse cx="955" cy="333" rx="6" ry="4.8" fill="#A56421"/>
+    <path d="M586 367C650 392 724 382 804 331" stroke="#A7FFEA" stroke-width="3.2" stroke-linecap="round" stroke-opacity="0.72"/>
+    <path d="M612 402C687 421 764 406 844 361" stroke="#67CFFF" stroke-width="2.4" stroke-linecap="round" stroke-opacity="0.6"/>
+  </g>
+
+  <g opacity="0.82">
+    <path d="M858 242L1220 154" stroke="#45BFFF" stroke-opacity="0.33"/>
+    <circle cx="1220" cy="154" r="6.2" fill="#4FD4FF"/>
+    <path d="M892 273L1264 278" stroke="#61E9C8" stroke-opacity="0.36"/>
+    <circle cx="1264" cy="278" r="6.2" fill="#7AF7D9"/>
+    <path d="M914 315L1245 410" stroke="#5DAFFF" stroke-opacity="0.34"/>
+    <circle cx="1245" cy="410" r="6.2" fill="#66B8FF"/>
+    <path d="M898 360L1188 500" stroke="#46DFAF" stroke-opacity="0.34"/>
+    <circle cx="1188" cy="500" r="6.2" fill="#6EFFE0"/>
+  </g>
+
+  <g>
+    <text x="486" y="532" fill="#F1F8FF" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="66" font-weight="800" letter-spacing="1.4">OpenHawk</text>
+    <text x="490" y="568" fill="#9CC6EB" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="24" letter-spacing="0.7">Global AI Signals • Radar • Analysis • Automation</text>
+  </g>
+</svg>

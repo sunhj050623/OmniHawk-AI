@@ -36,7 +36,7 @@
 ![Subscription Push](https://img.shields.io/badge/Subscription%20Push-Multi%20Channel-0F766E?style=flat-square)
 
 <p align="center">
-  <img src="image.png" alt="OmniHawk AI project banner" width="920" />
+  <img src="image.png" alt="OpenHawk project banner" width="920" />
 </p>
 
 [中文](README.md) | [English](README-EN.md) | [हिन्दी](README-HI.md) | [Español](README-ES.md) | [العربية](README-AR.md) | [Français](README-FR.md) | [Português](README-PT.md) | [বাংলা](README-BN.md) | **日本語** | [한국어](README-KO.md)
@@ -51,7 +51,7 @@ AI 信号は高度に断片化されており、高速に移動します。手�
 - 重複排除の問題: シンジケートされた再投稿により、繰り返しの取り込みと繰り返しの通知がトリガーされます。
 - 自動化のギャップ: 「インテリジェンス取得」をエージェント パイプラインに直接統合するのは困難です。
 
-「OmniHawk AI」は、これを、エージェントが直接呼び出すことができる常時稼働の拡張可能なインテリジェンス層に変えます。
+「OpenHawk」は、これを、エージェントが直接呼び出すことができる常時稼働の拡張可能なインテリジェンス層に変えます。
 
 ## 👥対象者
 - AI 研究者: 論文と手法の進化を継続的に追跡します。
@@ -92,10 +92,10 @@ AI 信号は高度に断片化されており、高速に移動します。手�
 例 (CLI):
 ```bash
 # Set AI Finance page output language to Japanese
-omnihawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
+openhawk-ai-cli call save_scope_settings --args '{"scope":"market_finance","output_language":"Japanese"}'
 
 # Fetch using this scope and language policy
-omnihawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
+openhawk-ai-cli call fetch_scope_items --args '{"scope":"market_finance","max_per_source":20}'
 ```
 
 ## 🧠 スマートプッシュ戦略
@@ -147,17 +147,17 @@ uv sync --locked
 
 1. メインのフェッチ/ランタイムを 1 回実行します。
 ```bash
-omnihawk-ai
+openhawk-ai
 ```
 
 2. インタラクティブな Web コンソール (6 ページの UI) を実行します。
 ```bash
-python -m omnihawk_ai.web.panel_server --port 8080 --output-dir output
+python -m openhawk_ai.web.panel_server --port 8080 --output-dir output
 ```
 
 3. MCP サービス (HTTP) を開始します。
 ```bash
-omnihawk-ai-mcp --transport http --host 0.0.0.0 --port 3333
+openhawk-ai-mcp --transport http --host 0.0.0.0 --port 3333
 ```
 
 ### 3) 🐳 Docker の起動
@@ -182,7 +182,7 @@ docker compose -f docker/docker-compose.yml logs -f
 ---
 
 ## 🤖 エージェント CLI (新規)
-エージェント/スクリプトが MCP トランスポートを使用せずに OmniHawk ツールを直接呼び出せるようにするために、このリポジトリには `omnihawk-ai-cli` が追加されています。
+エージェント/スクリプトが MCP トランスポートを使用せずに OpenHawk ツールを直接呼び出せるようにするために、このリポジトリには `openhawk-ai-cli` が追加されています。
 
 ### 🎯 設計目標
 - MCP ツールと同じ機能面 (同じツール名と引数セマンティクス)。
@@ -191,33 +191,33 @@ docker compose -f docker/docker-compose.yml logs -f
 
 ### 🧪 基本コマンド
 ```bash
-omnihawk-ai-cli tools
+openhawk-ai-cli tools
 ```
 
 ### 📌 一般的な例
 1. 利用可能なすべてのツールとパラメータをリストします。
 ```bash
-omnihawk-ai-cli tools
+openhawk-ai-cli tools
 ```
 
 2. インライン JSON を使用してツールを呼び出します。
 ```bash
-omnihawk-ai-cli call list_scope_items --args '{"scope":"market_finance","limit":20}'
+openhawk-ai-cli call list_scope_items --args '{"scope":"market_finance","limit":20}'
 ```
 
 3. args ファイルを使用してツールを呼び出します。
 ```bash
-omnihawk-ai-cli call upsert_scope_subscription --args-file ./payload.json
+openhawk-ai-cli call upsert_scope_subscription --args-file ./payload.json
 ```
 
 4. プロジェクトのルートと出力ディレクトリを上書きします。
 ```bash
-omnihawk-ai-cli --project-root . --output-dir ./output call get_project_overview
+openhawk-ai-cli --project-root . --output-dir ./output call get_project_overview
 ```
 
 5. コンパクトな JSON 出力 (パイプラインフレンドリー):
 ```bash
-omnihawk-ai-cli call list_scopes --compact
+openhawk-ai-cli call list_scopes --compact
 ```
 
 ### Windows PowerShell の例 (推奨)
@@ -225,7 +225,7 @@ omnihawk-ai-cli call list_scopes --compact
 ```powershell
 $payload = @{ scope = "market_finance"; limit = 20 } | ConvertTo-Json -Compress
 $payload | Set-Content -Encoding utf8 .\payload.json
-omnihawk-ai-cli call list_scope_items --args-file .\payload.json --compact
+openhawk-ai-cli call list_scope_items --args-file .\payload.json --compact
 ```
 
 2. here-string args ファイルを使用します。
@@ -238,12 +238,12 @@ omnihawk-ai-cli call list_scope_items --args-file .\payload.json --compact
 }
 '@ | Set-Content -Encoding utf8 .\payload.json
 
-omnihawk-ai-cli call fetch_scope_items --args-file .\payload.json --compact
+openhawk-ai-cli call fetch_scope_items --args-file .\payload.json --compact
 ```
 
 3. 引数を必要としないツールは直接呼び出すことができます。
 ```powershell
-omnihawk-ai-cli call get_project_overview --compact
+openhawk-ai-cli call get_project_overview --compact
 ```
 
 ### 🧾 終了コード
@@ -267,7 +267,7 @@ CLI の固定引数:
 ツール ビジネス引数はツールごとに定義されます。使用：
 
 ```bash
-omnihawk-ai-cli tools --compact
+openhawk-ai-cli tools --compact
 ```
 
 適用範囲の境界:
@@ -370,14 +370,14 @@ HTTP エンドポイント:
 ## 🗂️ プロジェクトの構造
 ```text
 .
-├─ omnihawk_ai/                # Core runtime (fetch/analyze/push/web)
+├─ openhawk_ai/                # Core runtime (fetch/analyze/push/web)
 │  ├─ __main__.py             # Main entry
 │  ├─ agent_cli.py            # Agent CLI entry (new)
 │  └─ web/panel_server.py     # Interactive console server
 ├─ mcp_server/                # MCP server
 ├─ config/                    # Configuration and prompt templates
 ├─ docker/                    # Dockerfile / compose / entry scripts
-├─ docs/assets/               # README visual assets (including OmniHawk SVG)
+├─ docs/assets/               # README visual assets (including OpenHawk SVG)
 ├─ output/                    # Runtime persistent data
 ├─ README.md
 └─ README-EN.md
@@ -401,7 +401,7 @@ CLI は、MCP によって現在公開されているすべての機能 (22 ツ�
 ### Q4: 最小のエージェント統合パスは何ですか?
 以下から始めます:
 ```bash
-omnihawk-ai-cli call get_project_overview
+openhawk-ai-cli call get_project_overview
 ```
 次に、必要に応じて `list_scope_items` / `list_papers` / `run_*_subscriptions` を呼び出します。
 
@@ -409,7 +409,7 @@ omnihawk-ai-cli call get_project_overview
 
 ## 🙏 謝辞と参照
 - このプロジェクトは、[TrendRadar](https://github.com/sansan0/TrendRadar) を参照し、それに触発されています。
-- OmniHawk AI は、6 つの並列ページ、地域化されたソース戦略、マルチチャネル サブスクリプション、および統合された MCP + Agent CLI ワークフローを備えたアーキテクチャを独自に拡張します。
+- OpenHawk は、6 つの並列ページ、地域化されたソース戦略、マルチチャネル サブスクリプション、および統合された MCP + Agent CLI ワークフローを備えたアーキテクチャを独自に拡張します。
 
 ---
 

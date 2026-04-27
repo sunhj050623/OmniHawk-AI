@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 新闻爬虫容器管理工具 - supercronic
@@ -37,7 +37,7 @@ def manual_run():
     print("🔄 手动执行爬虫...")
     try:
         result = subprocess.run(
-            ["omnihawk-ai"], cwd="/app", capture_output=False, text=True
+            ["openhawk-ai"], cwd="/app", capture_output=False, text=True
         )
         if result.returncode == 0:
             print("✅ 执行完成")
@@ -263,15 +263,15 @@ def show_status():
         if pid1_cmdline:
             print(f"    📋 当前 PID 1: {pid1_cmdline}")
         print("    💡 建议操作:")
-        print("       • 重启容器: docker restart omnihawk-ai")
-        print("       • 检查容器日志: docker logs omnihawk-ai")
+        print("       • 重启容器: docker restart openhawk-ai")
+        print("       • 检查容器日志: docker logs openhawk-ai")
 
     # 显示日志检查建议
     print("  📋 运行状态检查:")
-    print("    • 查看完整容器日志: docker logs omnihawk-ai")
-    print("    • 查看实时日志: docker logs -f omnihawk-ai")
+    print("    • 查看完整容器日志: docker logs openhawk-ai")
+    print("    • 查看实时日志: docker logs -f openhawk-ai")
     print("    • 手动执行测试: python manage.py run")
-    print("    • 重启容器服务: docker restart omnihawk-ai")
+    print("    • 重启容器服务: docker restart openhawk-ai")
 
 
 def show_config():
@@ -418,13 +418,13 @@ def show_logs():
                 subprocess.run(["tail", "-f", log_file], check=True)
                 break
         else:
-            print("📋 无法找到标准日志文件，建议使用: docker logs omnihawk-ai")
+            print("📋 无法找到标准日志文件，建议使用: docker logs openhawk-ai")
             
     except KeyboardInterrupt:
         print("\n👋 退出日志查看")
     except Exception as e:
         print(f"❌ 查看日志失败: {e}")
-        print("💡 建议使用: docker logs omnihawk-ai")
+        print("💡 建议使用: docker logs openhawk-ai")
 
 
 def restart_supercronic():
@@ -441,14 +441,14 @@ def restart_supercronic():
         if "supercronic" in pid1_cmdline.lower():
             print("  ✅ PID 1 是 supercronic")
             print("  💡 要重启 supercronic，需要重启整个容器:")
-            print("    docker restart omnihawk-ai")
+            print("    docker restart openhawk-ai")
         else:
             print("  ❌ PID 1 不是 supercronic，这是异常状态")
             print("  💡 建议重启容器以修复问题:")
-            print("    docker restart omnihawk-ai")
+            print("    docker restart openhawk-ai")
     except Exception as e:
         print(f"  ❌ 无法检查 PID 1: {e}")
-        print("  💡 建议重启容器: docker restart omnihawk-ai")
+        print("  💡 建议重启容器: docker restart openhawk-ai")
 
 
 def _read_proc_cmdline(pid: int) -> str:
@@ -657,7 +657,7 @@ def webserver_status():
 def show_help():
     """显示帮助信息"""
     help_text = """
-🐳 OmniHawk AI 容器管理工具
+🐳 OpenHawk 容器管理工具
 
 📋 命令列表:
   run              - 手动执行一次爬虫
@@ -679,10 +679,10 @@ def show_help():
   python manage.py start_webserver
 
   # 在宿主机执行
-  docker exec -it omnihawk-ai python manage.py run
-  docker exec -it omnihawk-ai python manage.py status
-  docker exec -it omnihawk-ai python manage.py start_webserver
-  docker logs omnihawk-ai
+  docker exec -it openhawk-ai python manage.py run
+  docker exec -it openhawk-ai python manage.py status
+  docker exec -it openhawk-ai python manage.py start_webserver
+  docker logs openhawk-ai
 
 💡 常用操作指南:
   1. 检查运行状态: status
@@ -696,11 +696,11 @@ def show_help():
 
   3. 查看日志: logs
      - 实时监控运行情况
-     - 也可使用: docker logs omnihawk-ai
+     - 也可使用: docker logs openhawk-ai
 
   4. 重启服务: restart
      - 由于 supercronic 是 PID 1，需要重启整个容器
-     - 使用: docker restart omnihawk-ai
+     - 使用: docker restart openhawk-ai
 
   5. Web 服务器管理:
      - 启动: start_webserver

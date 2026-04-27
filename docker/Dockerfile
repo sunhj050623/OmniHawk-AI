@@ -60,7 +60,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # 再复制项目代码并安装项目本身
 COPY docker/manage.py .
-COPY omnihawk_ai/ ./omnihawk_ai/
+COPY openhawk_ai/ ./openhawk_ai/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 

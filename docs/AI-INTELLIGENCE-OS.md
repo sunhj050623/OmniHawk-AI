@@ -1,10 +1,10 @@
-﻿# AI Intelligence OS Blueprint
+# AI Intelligence OS Blueprint
 
-This blueprint describes how to evolve OmniHawk AI into a full-stack AI intelligence platform.
+This blueprint describes how to evolve OpenHawk into a full-stack AI intelligence platform.
 
 ## Positioning
 
-OmniHawk AI should not be "just a crawler".
+OpenHawk should not be "just a crawler".
 
 Target positioning:
 
